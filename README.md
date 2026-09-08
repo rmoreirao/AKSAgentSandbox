@@ -13,6 +13,7 @@ see
 - Azure CLI with Bicep
 - kubectl with Kustomize support
 
+
 ## Validate
 
 ```powershell
