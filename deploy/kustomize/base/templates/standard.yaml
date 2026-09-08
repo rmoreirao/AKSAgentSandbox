@@ -1,0 +1,23 @@
+apiVersion: devsandbox.io/v1alpha1
+kind: DevSandboxTemplate
+metadata:
+  name: standard
+  labels:
+    app.kubernetes.io/managed-by: devsandbox
+    devsandbox.io/template-version: 0.1.0
+spec:
+  displayName: Standard
+  description: Curated non-root shell environment with Git, Git LFS, and DevSandbox tooling.
+  version: 0.1.0
+  image:
+    repository: example.invalid/devsandbox/standard
+    digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+  defaultProfile: small
+  entryAction: shell
+  servicePorts: []
+  sandboxBlueprint: {}
+  capabilities:
+    vscode: false
+    copilot: false
+    playwright: false
+

@@ -1,0 +1,53 @@
+// Recent DevSandbox audit timeline (Container Insights ContainerLogV2).
+ContainerLogV2
+| where TimeGenerated > ago(24h)
+| extend audit = parse_json(LogMessage)
+| where tostring(audit.msg) == "audit"
+| project TimeGenerated,
+          service=tostring(audit.service),
+          event=tostring(audit.event),
+          outcome=tostring(audit.outcome),
+          user_id=tostring(audit.user_id),
+          sandbox_uid=tostring(audit.sandbox_uid),
+          sandbox_name=tostring(audit.sandbox_name),
+          template=tostring(audit.template),
+          profile=tostring(audit.profile),
+          repository=tostring(audit.repository),
+          commit_sha=tostring(audit.commit_sha),
+          session=tostring(audit.session),
+          reason=tostring(audit.reason)
+| order by TimeGenerated desc
+
+// Lifecycle failures and quota rejection.
+ContainerLogV2
+| where TimeGenerated > ago(24h)
+| extend audit = parse_json(LogMessage)
+| where tostring(audit.msg) == "audit"
+| where tostring(audit.event) in ("sandbox.failure", "quota.rejection")
+| summarize occurrences=count(), last_seen=max(TimeGenerated)
+    by event=tostring(audit.event), reason=tostring(audit.reason),
+       template=tostring(audit.template), profile=tostring(audit.profile)
+| order by occurrences desc
+
+// Interactive session starts/ends. No command or stream data is recorded.
+ContainerLogV2
+| where TimeGenerated > ago(4h)
+| extend audit = parse_json(LogMessage)
+| where tostring(audit.msg) == "audit" and tostring(audit.event) in ("session.start", "session.end")
+| summarize starts=countif(tostring(audit.event) == "session.start"),
+            ends=countif(tostring(audit.event) == "session.end")
+    by session=tostring(audit.session), sandbox_uid=tostring(audit.sandbox_uid)
+
+// Safety guard: this query must return zero records.
+ContainerLogV2
+| where TimeGenerated > ago(24h)
+| extend audit = parse_json(LogMessage)
+| where tostring(audit.msg) == "audit"
+| where bag_has_key(audit, "token")
+    or bag_has_key(audit, "refresh_token")
+    or bag_has_key(audit, "command")
+    or bag_has_key(audit, "stdout")
+    or bag_has_key(audit, "stderr")
+    or bag_has_key(audit, "output")
+    or bag_has_key(audit, "file_content")
+| project TimeGenerated, service=tostring(audit.service), event=tostring(audit.event)

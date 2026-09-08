@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+state_root="${DEVSANDBOX_VSCODE_STATE_DIR:-/workspace/.devsandbox/vscode}"
+mkdir -p "${state_root}/data" "${state_root}/extensions"
+exec code-server \
+  --auth none \
+  --bind-addr "${DEVSANDBOX_CODE_SERVER_BIND:-0.0.0.0:13337}" \
+  --disable-telemetry \
+  --user-data-dir "${state_root}/data" \
+  --extensions-dir "${state_root}/extensions" \
+  /workspace/repo "$@"

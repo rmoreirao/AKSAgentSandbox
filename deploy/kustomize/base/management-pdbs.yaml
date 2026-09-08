@@ -1,0 +1,32 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: devsandbox-api
+  namespace: devsandbox-system
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: devsandbox-api
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: devsandbox-web
+  namespace: devsandbox-system
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: devsandbox-web
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: devsandbox-broker
+  namespace: devsandbox-system
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: devsandbox-broker

@@ -1,0 +1,13 @@
+{
+  "privateRepositoryRequirements": [
+    "Git LFS object",
+    "private submodule in DEVSANDBOX_TEST_ORG",
+    "test-user branch push permission",
+    "test-user pull-request create and close permission"
+  ],
+  "publicRepositoryRequirements": [
+    "public GitHub visibility",
+    "owner outside DEVSANDBOX_TEST_ORG"
+  ],
+  "mutationPolicy": "Only the dedicated devsandbox-e2e-* branch is pushed; cleanup closes its pull request and deletes the branch."
+}

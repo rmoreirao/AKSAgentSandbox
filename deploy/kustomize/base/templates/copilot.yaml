@@ -1,0 +1,23 @@
+apiVersion: devsandbox.io/v1alpha1
+kind: DevSandboxTemplate
+metadata:
+  name: copilot
+  labels:
+    app.kubernetes.io/managed-by: devsandbox
+    devsandbox.io/template-version: 0.1.0
+spec:
+  displayName: Copilot
+  description: Standard DevSandbox environment with GitHub CLI, Copilot CLI, and Playwright Chromium.
+  version: 0.1.0
+  image:
+    repository: example.invalid/devsandbox/copilot
+    digest: sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+  defaultProfile: medium
+  entryAction: copilot
+  servicePorts: []
+  sandboxBlueprint: {}
+  capabilities:
+    vscode: false
+    copilot: true
+    playwright: true
+

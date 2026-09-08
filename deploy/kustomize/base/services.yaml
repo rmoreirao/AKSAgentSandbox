@@ -1,0 +1,71 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: devsandbox-api
+  namespace: devsandbox-system
+  labels:
+    app.kubernetes.io/name: devsandbox-api
+spec:
+  type: ClusterIP
+  publishNotReadyAddresses: true
+  selector:
+    app.kubernetes.io/name: devsandbox-api
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+      protocol: TCP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: devsandbox-api-exchange
+  namespace: devsandbox-system
+  labels:
+    app.kubernetes.io/name: devsandbox-api
+    devsandbox.io/exposure: internal
+spec:
+  type: ClusterIP
+  publishNotReadyAddresses: true
+  selector:
+    app.kubernetes.io/name: devsandbox-api
+  ports:
+    - name: exchange
+      port: 8081
+      targetPort: exchange
+      protocol: TCP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: devsandbox-web
+  namespace: devsandbox-system
+  labels:
+    app.kubernetes.io/name: devsandbox-web
+spec:
+  type: ClusterIP
+  publishNotReadyAddresses: true
+  selector:
+    app.kubernetes.io/name: devsandbox-web
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+      protocol: TCP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: devsandbox-broker
+  namespace: devsandbox-system
+  labels:
+    app.kubernetes.io/name: devsandbox-broker
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: devsandbox-broker
+  ports:
+    - name: https
+      port: 8443
+      targetPort: https
+      protocol: TCP

@@ -1,0 +1,29 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: sandbox-router-pod-reader
+  namespace: devsandbox-workloads
+rules:
+  - apiGroups:
+      - ""
+    resources:
+      - pods
+    verbs:
+      - get
+      - list
+      - watch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: sandbox-router-pod-reader
+  namespace: devsandbox-workloads
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: sandbox-router-pod-reader
+subjects:
+  - kind: ServiceAccount
+    name: sandbox-router
+    namespace: devsandbox-system
+

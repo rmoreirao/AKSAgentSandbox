@@ -1,0 +1,199 @@
+name: Deploy PoC
+
+env:
+  NPM_CONFIG_REGISTRY: https://packagefeedproxy.microsoft.io/npm/
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: GitHub environment containing the documented variables and secrets
+        required: true
+        type: environment
+      location:
+        description: Azure region
+        required: true
+        default: westeurope
+        type: string
+      resource_prefix:
+        description: DNS-safe resource prefix (3-12 characters)
+        required: true
+        default: devsbx
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: devsandbox-poc-${{ inputs.environment }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy and validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    environment: ${{ inputs.environment }}
+    env:
+      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      AZURE_DEPLOYMENT_PRINCIPAL_ID: ${{ secrets.AZURE_DEPLOYMENT_PRINCIPAL_ID }}
+      AZURE_LOCATION: ${{ inputs.location }}
+      DEVSANDBOX_RESOURCE_PREFIX: ${{ inputs.resource_prefix }}
+      DEVSANDBOX_GITHUB_APP_CLIENT_ID: ${{ secrets.DEVSANDBOX_GITHUB_APP_CLIENT_ID }}
+      DEVSANDBOX_GITHUB_APP_CLIENT_SECRET: ${{ secrets.DEVSANDBOX_GITHUB_APP_CLIENT_SECRET }}
+      DEVSANDBOX_PRIMARY_GITHUB_ORG: ${{ vars.DEVSANDBOX_PRIMARY_GITHUB_ORG }}
+      DEVSANDBOX_BROKER_TLS_CERTIFICATE: ${{ secrets.DEVSANDBOX_BROKER_TLS_CERTIFICATE }}
+      DEVSANDBOX_BROKER_TLS_PRIVATE_KEY: ${{ secrets.DEVSANDBOX_BROKER_TLS_PRIVATE_KEY }}
+      DEVSANDBOX_ROUTE_PUBLIC_KEY: ${{ secrets.DEVSANDBOX_ROUTE_PUBLIC_KEY }}
+      DEVSANDBOX_TEST_ORG: ${{ vars.DEVSANDBOX_TEST_ORG }}
+      DEVSANDBOX_TEST_PRIVATE_REPO: ${{ vars.DEVSANDBOX_TEST_PRIVATE_REPO }}
+      DEVSANDBOX_TEST_PUBLIC_REPO: ${{ vars.DEVSANDBOX_TEST_PUBLIC_REPO }}
+      DEVSANDBOX_TEST_USER: ${{ vars.DEVSANDBOX_TEST_USER }}
+      DEVSANDBOX_TEST_USER_SESSION: ${{ secrets.DEVSANDBOX_TEST_USER_SESSION }}
+      DEVSANDBOX_TEST_SECOND_USER_SESSION: ${{ secrets.DEVSANDBOX_TEST_SECOND_USER_SESSION }}
+      PLAYWRIGHT_HTML_OPEN: never
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Go from go.mod
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Set up Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install validation dependencies
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+          az bicep install
+
+      - name: Check OIDC inputs by name
+        shell: pwsh
+        run: |
+          $missing = @('AZURE_CLIENT_ID', 'AZURE_TENANT_ID', 'AZURE_SUBSCRIPTION_ID') |
+            Where-Object { [string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($_)) }
+          if ($missing.Count) {
+            Write-Output "Blocked: missing GitHub environment secrets: $($missing -join ', ')"
+            exit 2
+          }
+
+      - name: Validate named deployment inputs
+        shell: pwsh
+        run: ./scripts/preflight.ps1 -Mode Deployment -SkipAzureChecks
+
+      - name: Sign in to Azure with GitHub OIDC
+        uses: azure/login@7ddb5af1ef8758cf1353cf3b42f940aee27ba21c # v3.0.2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Validate Azure roles and quota
+        shell: pwsh
+        run: ./scripts/preflight.ps1 -Mode Deployment
+
+      - name: Validate deployment sources
+        shell: pwsh
+        run: ./scripts/deploy.ps1 -Stage Validate
+
+      - name: Review Bicep what-if
+        shell: pwsh
+        run: ./scripts/deploy.ps1 -Stage WhatIf
+
+      - name: Deploy Azure foundation
+        shell: pwsh
+        run: ./scripts/deploy.ps1 -Stage Foundation
+
+      - name: Resolve non-secret foundation outputs
+        shell: pwsh
+        run: |
+          $name = "devsandbox-$($env:DEVSANDBOX_RESOURCE_PREFIX.ToLowerInvariant())-foundation"
+          $outputs = az deployment sub show --name $name --query properties.outputs -o json --only-show-errors |
+            ConvertFrom-Json
+          @{
+            DEVSANDBOX_RESOURCE_GROUP = $outputs.resourceGroupName.value
+            DEVSANDBOX_AKS_CLUSTER = $outputs.aksClusterName.value
+            DEVSANDBOX_CONTAINER_REGISTRY = $outputs.containerRegistryName.value
+            DEVSANDBOX_API_IDENTITY_CLIENT_ID = $outputs.apiIdentityClientId.value
+            DEVSANDBOX_BROKER_IDENTITY_CLIENT_ID = $outputs.brokerIdentityClientId.value
+            DEVSANDBOX_BOOTSTRAP_IDENTITY_CLIENT_ID = $outputs.bootstrapIdentityClientId.value
+            DEVSANDBOX_KEY_VAULT_URI = $outputs.keyVaultUri.value
+            DEVSANDBOX_LOG_ANALYTICS_WORKSPACE_ID = $outputs.logAnalyticsWorkspaceId.value
+            DEVSANDBOX_FRONT_DOOR_PROFILE = $outputs.frontDoorProfileName.value
+            DEVSANDBOX_FRONT_DOOR_PROFILE_RESOURCE_ID = $outputs.frontDoorProfileResourceId.value
+            DEVSANDBOX_FRONT_DOOR_ID = $outputs.frontDoorProfileId.value
+            DEVSANDBOX_FRONT_DOOR_API_ENDPOINT = $outputs.frontDoorApiEndpointName.value
+            DEVSANDBOX_FRONT_DOOR_WEB_ENDPOINT = $outputs.frontDoorWebEndpointName.value
+            DEVSANDBOX_API_HOSTNAME = $outputs.frontDoorApiHostname.value
+            DEVSANDBOX_WEB_HOSTNAME = $outputs.frontDoorWebHostname.value
+            DEVSANDBOX_API_ORIGIN_HOSTNAME = $outputs.apiOriginHostname.value
+            DEVSANDBOX_WEB_ORIGIN_HOSTNAME = $outputs.webOriginHostname.value
+          }.GetEnumerator() | ForEach-Object { "$($_.Key)=$($_.Value)" } |
+            Add-Content -LiteralPath $env:GITHUB_ENV
+
+      - name: Build and push immutable images
+        shell: pwsh
+        run: ./scripts/deploy.ps1 -Stage Images
+
+      - name: Apply Kubernetes and wait for rollouts
+        shell: pwsh
+        run: ./scripts/deploy.ps1 -Stage Kubernetes
+
+      - name: Bind Azure Front Door to the AKS origin
+        shell: pwsh
+        run: ./scripts/deploy.ps1 -Stage FrontDoor
+
+      - name: Resolve primary test user ID
+        shell: pwsh
+        run: |
+          $headers = @{ Authorization = "Bearer $env:DEVSANDBOX_TEST_USER_SESSION" }
+          $deadline = [DateTimeOffset]::UtcNow.AddMinutes(10)
+          do {
+            try {
+              $identity = Invoke-RestMethod -Uri "https://$env:DEVSANDBOX_API_HOSTNAME/v1/me" -Headers $headers -TimeoutSec 30
+              if ($identity.githubUserId -match '^\d+$') { break }
+            }
+            catch {
+              if ([DateTimeOffset]::UtcNow -ge $deadline) { throw }
+            }
+            Start-Sleep -Seconds 15
+          } while ([DateTimeOffset]::UtcNow -lt $deadline)
+          if ($identity.githubUserId -notmatch '^\d+$') {
+            throw 'Primary test session returned no numeric GitHub user ID before the readiness deadline.'
+          }
+          "DEVSANDBOX_TEST_USER_ID=$($identity.githubUserId)" | Add-Content -LiteralPath $env:GITHUB_ENV
+
+      - name: Verify cloud deployment
+        shell: pwsh
+        run: ./scripts/deploy.ps1 -Stage Verify -SkipLocalConfiguration
+
+      - name: Validate E2E identities and fixtures
+        shell: pwsh
+        run: ./scripts/preflight.ps1 -Mode E2E
+
+      - name: Run focused UI smoke
+        shell: pwsh
+        run: ./scripts/e2e.ps1 -Scenario VSCode
+
+      - name: Run complete product E2E
+        shell: pwsh
+        run: ./scripts/e2e.ps1 -Scenario All
+
+      - name: Validate audit records
+        shell: pwsh
+        run: ./scripts/audit-e2e.ps1 -WorkspaceId $env:DEVSANDBOX_LOG_ANALYTICS_WORKSPACE_ID -LookbackMinutes 180
+
+      - name: Clean up test sandboxes
+        if: always()
+        shell: pwsh
+        run: ./scripts/cleanup-e2e.ps1 -Method Auto

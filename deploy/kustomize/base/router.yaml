@@ -1,0 +1,113 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sandbox-router
+  namespace: devsandbox-system
+  labels:
+    app.kubernetes.io/name: sandbox-router
+    app.kubernetes.io/component: router
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: sandbox-router
+      app.kubernetes.io/component: router
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: sandbox-router
+        app.kubernetes.io/component: router
+    spec:
+      serviceAccountName: sandbox-router
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: kubernetes.azure.com/mode
+                    operator: In
+                    values:
+                      - system
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                topologyKey: kubernetes.io/hostname
+                labelSelector:
+                  matchLabels:
+                    app.kubernetes.io/name: sandbox-router
+      containers:
+        - name: sandbox-router
+          image: example.invalid/devsandbox/sandbox-router@sha256:1111111111111111111111111111111111111111111111111111111111111111
+          imagePullPolicy: IfNotPresent
+          args:
+            - --http-bind-address=:8080
+            - --metrics-bind-address=:9090
+            - --health-probe-bind-address=:8081
+            - --cluster-domain=cluster.local
+            - --proxy-timeout=180s
+            - --upstream-max-retries=3
+            - --cache-enabled=true
+            - --cache-namespace=devsandbox-workloads
+          ports:
+            - name: proxy
+              containerPort: 8080
+              protocol: TCP
+            - name: metrics
+              containerPort: 9090
+              protocol: TCP
+            - name: healthz
+              containerPort: 8081
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: healthz
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: healthz
+            initialDelaySeconds: 1
+            periodSeconds: 5
+          resources:
+            requests:
+              cpu: 250m
+              memory: 256Mi
+            limits:
+              cpu: "2"
+              memory: 1Gi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            seccompProfile:
+              type: RuntimeDefault
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      terminationGracePeriodSeconds: 45
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sandbox-router
+  namespace: devsandbox-system
+  labels:
+    app.kubernetes.io/name: sandbox-router
+    app.kubernetes.io/component: router
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: sandbox-router
+    app.kubernetes.io/component: router
+  ports:
+    - name: proxy
+      port: 8080
+      targetPort: proxy
+      protocol: TCP

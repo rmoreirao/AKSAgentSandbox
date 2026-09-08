@@ -1,0 +1,77 @@
+name: CI
+
+env:
+  NPM_CONFIG_REGISTRY: https://packagefeedproxy.microsoft.io/npm/
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  Static:
+    name: Static
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Go from go.mod
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Set up Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install Node.js dependencies
+        run: npm ci
+
+      - name: Verify Azure CLI and install Bicep
+        run: |
+          az version
+          az bicep install
+          az bicep version
+
+      - name: Verify kubectl and Kustomize
+        run: |
+          kubectl version --client
+          kubectl kustomize ./deploy/kustomize/overlays/poc >/dev/null
+
+      - name: Verify Playwright CLI
+        run: npx --no-install playwright-cli --help
+
+      - name: Run Static gate
+        shell: pwsh
+        run: ./scripts/validate.ps1 -Mode Static
+
+  Build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Go from go.mod
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Set up Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install Node.js dependencies
+        run: npm ci
+
+      - name: Run Build gate
+        shell: pwsh
+        run: ./scripts/validate.ps1 -Mode Build

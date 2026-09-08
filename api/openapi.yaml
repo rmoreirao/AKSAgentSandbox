@@ -1,0 +1,743 @@
+openapi: 3.0.3
+info:
+  title: DevSandbox API
+  version: 1.0.0-alpha.1
+  description: Public management and connectivity API for DevSandbox.
+servers:
+  - url: https://api.devsandbox.example
+security:
+  - bearerAuth: []
+tags:
+  - name: Authentication
+  - name: Identity
+  - name: Templates
+  - name: Sandboxes
+  - name: Connectivity
+paths:
+  /v1/auth/device/start:
+    post:
+      tags: [Authentication]
+      operationId: startDeviceAuthorization
+      security: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeviceStartRequest'
+      responses:
+        '200':
+          description: Device authorization started.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeviceStartResponse'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/auth/device/poll:
+    post:
+      tags: [Authentication]
+      operationId: pollDeviceAuthorization
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DevicePollRequest'
+      responses:
+        '200':
+          description: Device authorization status.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DevicePollResponse'
+        '202':
+          description: Authorization remains pending.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DevicePollResponse'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me:
+    get:
+      tags: [Identity]
+      operationId: getCurrentUser
+      responses:
+        '200':
+          description: Authenticated user.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/templates:
+    get:
+      tags: [Templates]
+      operationId: listTemplates
+      responses:
+        '200':
+          description: Published templates.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Template'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/templates/{name}:
+    parameters:
+      - $ref: '#/components/parameters/SandboxOrTemplateName'
+    get:
+      tags: [Templates]
+      operationId: getTemplate
+      responses:
+        '200':
+          description: Published template.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Template'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/sandboxes:
+    post:
+      tags: [Sandboxes]
+      operationId: createSandbox
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateSandboxRequest'
+      responses:
+        '201':
+          description: Sandbox accepted for provisioning.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Sandbox'
+        default:
+          $ref: '#/components/responses/Error'
+    get:
+      tags: [Sandboxes]
+      operationId: listSandboxes
+      parameters:
+        - name: includeRetained
+          in: query
+          schema:
+            type: boolean
+            default: false
+      responses:
+        '200':
+          description: Sandboxes owned by the authenticated user.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Sandbox'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/sandboxes/{name}:
+    parameters:
+      - $ref: '#/components/parameters/SandboxOrTemplateName'
+    get:
+      tags: [Sandboxes]
+      operationId: getSandbox
+      responses:
+        '200':
+          description: Owner-authorized sandbox status.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Sandbox'
+        default:
+          $ref: '#/components/responses/Error'
+    delete:
+      tags: [Sandboxes]
+      operationId: deleteSandbox
+      responses:
+        '204':
+          description: Sandbox deleted or deletion already in progress.
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/sandboxes/{name}/stop:
+    parameters:
+      - $ref: '#/components/parameters/SandboxOrTemplateName'
+    post:
+      tags: [Sandboxes]
+      operationId: stopSandbox
+      responses:
+        '202':
+          description: Stop accepted, or sandbox already stopped.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Sandbox'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/sandboxes/{name}/resume:
+    parameters:
+      - $ref: '#/components/parameters/SandboxOrTemplateName'
+    post:
+      tags: [Sandboxes]
+      operationId: resumeSandbox
+      responses:
+        '202':
+          description: Resume accepted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Sandbox'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/sandboxes/{name}/events:
+    parameters:
+      - $ref: '#/components/parameters/SandboxOrTemplateName'
+    get:
+      tags: [Sandboxes]
+      operationId: listSandboxEvents
+      parameters:
+        - name: after
+          in: query
+          description: Return events after this opaque cursor.
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Recent owner-visible lifecycle events.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SandboxEvent'
+                  cursor:
+                    type: string
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/sandboxes/{name}/exec:
+    parameters:
+      - $ref: '#/components/parameters/SandboxOrTemplateName'
+    post:
+      tags: [Connectivity]
+      operationId: executeSandboxCommand
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExecRequest'
+      responses:
+        '200':
+          description: Foreground command result.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExecResult'
+        '202':
+          description: Detached managed job created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Job'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/sandboxes/{name}/jobs:
+    parameters:
+      - $ref: '#/components/parameters/SandboxOrTemplateName'
+    get:
+      tags: [Connectivity]
+      operationId: listSandboxJobs
+      responses:
+        '200':
+          description: Restart-safe managed job summaries.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Job'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/sandboxes/{name}/jobs/{jobId}:
+    parameters:
+      - $ref: '#/components/parameters/SandboxOrTemplateName'
+      - $ref: '#/components/parameters/JobID'
+    delete:
+      tags: [Connectivity]
+      operationId: stopSandboxJob
+      responses:
+        '202':
+          description: Job stop accepted, or job already terminal.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Job'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/sandboxes/{name}/vscode-url:
+    parameters:
+      - $ref: '#/components/parameters/SandboxOrTemplateName'
+    post:
+      tags: [Connectivity]
+      operationId: createVSCodeURL
+      responses:
+        '200':
+          description: Short-lived owner-bound VS Code URL.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [url, expiresAt]
+                properties:
+                  url:
+                    type: string
+                    format: uri
+                  expiresAt:
+                    type: string
+                    format: date-time
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/sandboxes/{name}/shell:
+    parameters:
+      - $ref: '#/components/parameters/SandboxOrTemplateName'
+    get:
+      tags: [Connectivity]
+      operationId: connectSandboxShell
+      description: Upgrade an authenticated owner request to a WebSocket terminal stream.
+      x-websocket: true
+      responses:
+        '101':
+          description: Switching Protocols.
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/sandboxes/{name}/exec/stream:
+    parameters:
+      - $ref: '#/components/parameters/SandboxOrTemplateName'
+    get:
+      tags: [Connectivity]
+      operationId: streamSandboxExec
+      description: Upgrade to a WebSocket command stream. Arguments are sent after upgrade and are not persisted.
+      x-websocket: true
+      responses:
+        '101':
+          description: Switching Protocols.
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/sandboxes/{name}/ports/{port}:
+    parameters:
+      - $ref: '#/components/parameters/SandboxOrTemplateName'
+      - $ref: '#/components/parameters/RemotePort'
+    get:
+      tags: [Connectivity]
+      operationId: tunnelSandboxPort
+      description: Upgrade to an authenticated WebSocket carrying raw tunnel frames.
+      x-websocket: true
+      responses:
+        '101':
+          description: Switching Protocols.
+        default:
+          $ref: '#/components/responses/Error'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: DevSandbox session
+  parameters:
+    SandboxOrTemplateName:
+      name: name
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: '^[a-z0-9](?:[-a-z0-9]*[a-z0-9])?$'
+    JobID:
+      name: jobId
+      in: path
+      required: true
+      schema:
+        type: string
+        minLength: 1
+    RemotePort:
+      name: port
+      in: path
+      required: true
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 65535
+  responses:
+    Error:
+      description: Request failed.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+  schemas:
+    Error:
+      type: object
+      additionalProperties: false
+      required: [code, message]
+      properties:
+        code:
+          type: string
+          description: Stable machine-readable error code.
+          enum:
+            - invalid_request
+            - authentication_required
+            - forbidden
+            - not_found
+            - conflict
+            - invalid_state
+            - quota_exceeded
+            - provisioning_failed
+            - transport_failed
+            - internal_error
+        message:
+          type: string
+          description: User-safe diagnostic message.
+        details:
+          type: object
+          description: Optional non-secret structured context.
+          additionalProperties: true
+    DeviceStartRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        clientName:
+          type: string
+          maxLength: 100
+    DeviceStartResponse:
+      type: object
+      additionalProperties: false
+      required: [flowId, userCode, verificationUri, expiresAt, pollIntervalSeconds]
+      properties:
+        flowId:
+          type: string
+        userCode:
+          type: string
+        verificationUri:
+          type: string
+          format: uri
+        expiresAt:
+          type: string
+          format: date-time
+        pollIntervalSeconds:
+          type: integer
+          minimum: 1
+    DevicePollRequest:
+      type: object
+      additionalProperties: false
+      required: [flowId]
+      properties:
+        flowId:
+          type: string
+          minLength: 1
+    DevicePollResponse:
+      type: object
+      additionalProperties: false
+      required: [state]
+      properties:
+        state:
+          type: string
+          enum: [pending, authorized, denied, expired]
+        sessionToken:
+          type: string
+          writeOnly: true
+        expiresAt:
+          type: string
+          format: date-time
+        user:
+          $ref: '#/components/schemas/User'
+    User:
+      type: object
+      additionalProperties: false
+      required: [githubUserId, githubLogin]
+      properties:
+        githubUserId:
+          type: string
+        githubLogin:
+          type: string
+        displayName:
+          type: string
+        avatarUrl:
+          type: string
+          format: uri
+    Capabilities:
+      type: object
+      additionalProperties: false
+      required: [vscode, copilot, playwright]
+      properties:
+        vscode:
+          type: boolean
+        copilot:
+          type: boolean
+        playwright:
+          type: boolean
+    Template:
+      type: object
+      additionalProperties: false
+      required: [name, displayName, description, version, imageDigest, defaultProfile, entryAction, capabilities]
+      properties:
+        name:
+          type: string
+        displayName:
+          type: string
+        description:
+          type: string
+        version:
+          type: string
+        imageDigest:
+          type: string
+          pattern: '^sha256:[0-9a-fA-F]{64}$'
+        defaultProfile:
+          $ref: '#/components/schemas/ProfileName'
+        entryAction:
+          type: string
+          enum: [shell, vscode, copilot]
+        servicePorts:
+          type: array
+          items:
+            type: integer
+            minimum: 1
+            maximum: 65535
+        capabilities:
+          $ref: '#/components/schemas/Capabilities'
+    ProfileName:
+      type: string
+      enum: [small, medium, large]
+    Source:
+      oneOf:
+        - $ref: '#/components/schemas/GitSource'
+        - $ref: '#/components/schemas/EmptySource'
+      discriminator:
+        propertyName: type
+        mapping:
+          git: '#/components/schemas/GitSource'
+          empty: '#/components/schemas/EmptySource'
+    GitSource:
+      type: object
+      additionalProperties: false
+      required: [type, repositoryId, repositoryUrl]
+      properties:
+        type:
+          type: string
+          enum: [git]
+        repositoryId:
+          type: string
+        repositoryUrl:
+          type: string
+          format: uri
+        refName:
+          type: string
+        commitSha:
+          type: string
+          pattern: '^[0-9a-fA-F]{40}$'
+        lfs:
+          type: boolean
+          default: false
+        submodules:
+          type: boolean
+          default: false
+    EmptySource:
+      type: object
+      additionalProperties: false
+      required: [type]
+      properties:
+        type:
+          type: string
+          enum: [empty]
+    CreateSandboxRequest:
+      type: object
+      additionalProperties: false
+      required: [source, template]
+      properties:
+        name:
+          type: string
+        source:
+          $ref: '#/components/schemas/Source'
+        template:
+          type: string
+        profile:
+          $ref: '#/components/schemas/ProfileName'
+        idleTimeoutSeconds:
+          type: integer
+          minimum: 1
+          maximum: 7200
+          default: 7200
+        resumeExisting:
+          type: boolean
+          default: false
+        createNew:
+          type: boolean
+          default: false
+    Sandbox:
+      type: object
+      additionalProperties: false
+      required: [name, owner, source, template, profile, desiredState, phase, createdAt]
+      properties:
+        name:
+          type: string
+        owner:
+          $ref: '#/components/schemas/User'
+        source:
+          $ref: '#/components/schemas/Source'
+        template:
+          $ref: '#/components/schemas/TemplateReference'
+        profile:
+          $ref: '#/components/schemas/Profile'
+        desiredState:
+          type: string
+          enum: [Running, Stopped]
+        phase:
+          type: string
+          enum: [Pending, Provisioning, Initializing, Running, Stopping, Stopped, Resuming, Failed, Deleting]
+        initializedCommitSha:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        lastActivityTime:
+          type: string
+          format: date-time
+        idleDeadline:
+          type: string
+          format: date-time
+        stoppedAt:
+          type: string
+          format: date-time
+        retentionDeadline:
+          type: string
+          format: date-time
+        conditions:
+          type: array
+          items:
+            $ref: '#/components/schemas/Condition'
+    TemplateReference:
+      type: object
+      additionalProperties: false
+      required: [name, version, imageDigest]
+      properties:
+        name:
+          type: string
+        version:
+          type: string
+        imageDigest:
+          type: string
+    Profile:
+      type: object
+      additionalProperties: false
+      required: [name, cpu, memory, storage]
+      properties:
+        name:
+          $ref: '#/components/schemas/ProfileName'
+        cpu:
+          type: string
+        memory:
+          type: string
+        storage:
+          type: string
+    Condition:
+      type: object
+      additionalProperties: false
+      required: [type, status, reason, message, lastTransitionTime]
+      properties:
+        type:
+          type: string
+        status:
+          type: string
+          enum: ["True", "False", Unknown]
+        reason:
+          type: string
+        message:
+          type: string
+        lastTransitionTime:
+          type: string
+          format: date-time
+    SandboxEvent:
+      type: object
+      additionalProperties: false
+      required: [id, type, occurredAt, message]
+      properties:
+        id:
+          type: string
+        type:
+          type: string
+        occurredAt:
+          type: string
+          format: date-time
+        message:
+          type: string
+    ExecRequest:
+      type: object
+      additionalProperties: false
+      required: [arguments]
+      properties:
+        arguments:
+          type: array
+          minItems: 1
+          items:
+            type: string
+        detach:
+          type: boolean
+          default: false
+    ExecResult:
+      type: object
+      additionalProperties: false
+      required: [exitCode]
+      properties:
+        exitCode:
+          type: integer
+          format: int32
+        stdout:
+          type: string
+          description: Returned to this caller and not persisted by the service.
+        stderr:
+          type: string
+          description: Returned to this caller and not persisted by the service.
+    Job:
+      type: object
+      additionalProperties: false
+      description: Restart-safe lifecycle summary; command text and output are never included.
+      required: [id, sandboxName, state]
+      properties:
+        id:
+          type: string
+        sandboxName:
+          type: string
+        state:
+          type: string
+          enum: [Pending, Running, Completed, Failed, Stopped]
+        startedAt:
+          type: string
+          format: date-time
+        completedAt:
+          type: string
+          format: date-time
+        exitCode:
+          type: integer
+          format: int32
+        reason:
+          type: string

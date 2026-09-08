@@ -1,0 +1,524 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: devsandboxtemplates.devsandbox.io
+spec:
+  group: devsandbox.io
+  names:
+    kind: DevSandboxTemplate
+    listKind: DevSandboxTemplateList
+    plural: devsandboxtemplates
+    shortNames: [dst]
+    singular: devsandboxtemplate
+  scope: Cluster
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      subresources:
+        status: {}
+      schema:
+        openAPIV3Schema:
+          type: object
+          required: [spec]
+          x-kubernetes-validations:
+            - rule: "!has(oldSelf.spec) || self.spec == oldSelf.spec"
+              message: published template specs are immutable
+          properties:
+            apiVersion:
+              type: string
+            kind:
+              type: string
+            metadata:
+              type: object
+            spec:
+              type: object
+              required: [displayName, description, version, image, capabilities]
+              properties:
+                displayName:
+                  type: string
+                  minLength: 1
+                description:
+                  type: string
+                version:
+                  type: string
+                  pattern: '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$'
+                image:
+                  type: object
+                  required: [repository, digest]
+                  properties:
+                    repository:
+                      type: string
+                      minLength: 1
+                    digest:
+                      type: string
+                      pattern: '^sha256:[0-9a-fA-F]{64}$'
+                defaultProfile:
+                  type: string
+                  enum: [small, medium, large]
+                  default: small
+                entryAction:
+                  type: string
+                  enum: [shell, vscode, copilot]
+                  default: shell
+                servicePorts:
+                  type: array
+                  items:
+                    type: object
+                    required: [name, port]
+                    properties:
+                      name:
+                        type: string
+                        minLength: 1
+                      port:
+                        type: integer
+                        format: int32
+                        minimum: 1
+                        maximum: 65535
+                      protocol:
+                        type: string
+                        enum: [TCP, UDP]
+                        default: TCP
+                sandboxBlueprint:
+                  type: object
+                  x-kubernetes-preserve-unknown-fields: true
+                  x-kubernetes-validations:
+                    - rule: "!has(self.volumeClaimTemplates)"
+                      message: volumeClaimTemplates are owned by the DevSandbox operator
+                    - rule: "!has(self.secret) && !has(self.secrets) && !has(self.token) && !has(self.password) && !has(self.credentials)"
+                      message: secret-like fields are not permitted
+                  properties:
+                    volumeClaimTemplates:
+                      type: array
+                      items:
+                        type: object
+                        x-kubernetes-preserve-unknown-fields: true
+                    secret:
+                      type: string
+                    secrets:
+                      type: string
+                    token:
+                      type: string
+                    password:
+                      type: string
+                    credentials:
+                      type: string
+                capabilities:
+                  type: object
+                  required: [vscode, copilot, playwright]
+                  properties:
+                    vscode:
+                      type: boolean
+                    copilot:
+                      type: boolean
+                    playwright:
+                      type: boolean
+            status:
+              type: object
+              properties:
+                conditions:
+                  type: array
+                  items:
+                    type: object
+                    required: [lastTransitionTime, message, reason, status, type]
+                    properties:
+                      lastTransitionTime:
+                        type: string
+                        format: date-time
+                      message:
+                        type: string
+                      observedGeneration:
+                        type: integer
+                        format: int64
+                      reason:
+                        type: string
+                      status:
+                        type: string
+                        enum: ["True", "False", Unknown]
+                      type:
+                        type: string
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: devsandboxes.devsandbox.io
+spec:
+  group: devsandbox.io
+  names:
+    kind: DevSandbox
+    listKind: DevSandboxList
+    plural: devsandboxes
+    shortNames: [ds]
+    singular: devsandbox
+  scope: Namespaced
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      subresources:
+        status: {}
+      schema:
+        openAPIV3Schema:
+          type: object
+          required: [spec]
+          x-kubernetes-validations:
+            - rule: "!has(oldSelf.spec) || self.spec.template == oldSelf.spec.template"
+              message: template is immutable
+            - rule: "!has(oldSelf.spec) || self.spec.profile == oldSelf.spec.profile"
+              message: profile is immutable
+          properties:
+            apiVersion:
+              type: string
+            kind:
+              type: string
+            metadata:
+              type: object
+            spec:
+              type: object
+              required: [owner, source, template, profile, lifecycle]
+              properties:
+                owner:
+                  type: object
+                  required: [githubUserId, githubLogin]
+                  properties:
+                    githubUserId:
+                      type: string
+                      minLength: 1
+                    githubLogin:
+                      type: string
+                      minLength: 1
+                source:
+                  type: object
+                  required: [type]
+                  x-kubernetes-validations:
+                    - rule: "self.type != 'git' || (has(self.repositoryId) && has(self.repositoryUrl))"
+                      message: git source requires repositoryId and repositoryUrl
+                    - rule: "self.type != 'empty' || (!has(self.repositoryId) && !has(self.repositoryUrl) && !has(self.refName) && !has(self.commitSha) && (!has(self.lfs) || !self.lfs) && (!has(self.submodules) || !self.submodules))"
+                      message: empty source cannot contain git fields
+                  properties:
+                    type:
+                      type: string
+                      enum: [git, empty]
+                    repositoryId:
+                      type: string
+                    repositoryUrl:
+                      type: string
+                      pattern: '^https://[^/@]+(?:/.*)?$'
+                    refName:
+                      type: string
+                    commitSha:
+                      type: string
+                      pattern: '^[0-9a-fA-F]{40}$'
+                    lfs:
+                      type: boolean
+                    submodules:
+                      type: boolean
+                    authorName:
+                      type: string
+                    authorEmail:
+                      type: string
+                    primaryOrg:
+                      type: string
+                    readOnly:
+                      type: boolean
+                template:
+                  type: object
+                  required: [name, version, imageDigest]
+                  properties:
+                    name:
+                      type: string
+                      minLength: 1
+                    version:
+                      type: string
+                      minLength: 1
+                    imageDigest:
+                      type: string
+                      pattern: '^sha256:[0-9a-fA-F]{64}$'
+                profile:
+                  type: object
+                  required: [name, cpu, memory, storage]
+                  x-kubernetes-validations:
+                    - rule: "(self.name == 'small' && self.cpu == '2' && self.memory == '4Gi' && self.storage == '20Gi') || (self.name == 'medium' && self.cpu == '4' && self.memory == '8Gi' && self.storage == '40Gi') || (self.name == 'large' && self.cpu == '8' && self.memory == '16Gi' && self.storage == '80Gi')"
+                      message: profile resources must match a supported profile
+                  properties:
+                    name:
+                      type: string
+                      enum: [small, medium, large]
+                    cpu:
+                      type: string
+                      minLength: 1
+                    memory:
+                      type: string
+                      minLength: 1
+                    storage:
+                      type: string
+                      minLength: 1
+                lifecycle:
+                  type: object
+                  properties:
+                    idleTimeoutSeconds:
+                      type: integer
+                      format: int32
+                      minimum: 1
+                      maximum: 7200
+                      default: 7200
+                    stoppedRetentionSeconds:
+                      type: integer
+                      format: int32
+                      minimum: 0
+                      default: 604800
+                    failedRetentionSeconds:
+                      type: integer
+                      format: int32
+                      minimum: 0
+                      default: 86400
+                desiredState:
+                  type: string
+                  enum: [Running, Stopped]
+                  default: Running
+            status:
+              type: object
+              properties:
+                phase:
+                  type: string
+                upstreamSandboxName:
+                  type: string
+                initializedCommitSha:
+                  type: string
+                lastActivityTime:
+                  type: string
+                  format: date-time
+                idleDeadline:
+                  type: string
+                  format: date-time
+                stoppedAt:
+                  type: string
+                  format: date-time
+                retentionDeadline:
+                  type: string
+                  format: date-time
+                conditions:
+                  type: array
+                  items:
+                    type: object
+                    required: [lastTransitionTime, message, reason, status, type]
+                    properties:
+                      lastTransitionTime:
+                        type: string
+                        format: date-time
+                      message:
+                        type: string
+                      observedGeneration:
+                        type: integer
+                        format: int64
+                      reason:
+                        type: string
+                      status:
+                        type: string
+                        enum: ["True", "False", Unknown]
+                      type:
+                        type: string
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: devsandboxuserquotas.devsandbox.io
+spec:
+  group: devsandbox.io
+  names:
+    kind: DevSandboxUserQuota
+    listKind: DevSandboxUserQuotaList
+    plural: devsandboxuserquotas
+    shortNames: [dsuq]
+    singular: devsandboxuserquota
+  scope: Namespaced
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      subresources:
+        status: {}
+      schema:
+        openAPIV3Schema:
+          type: object
+          required: [spec]
+          properties:
+            apiVersion:
+              type: string
+            kind:
+              type: string
+            metadata:
+              type: object
+            spec:
+              type: object
+              required: [githubUserId, limits]
+              x-kubernetes-validations:
+                - rule: "!has(oldSelf.githubUserId) || self.githubUserId == oldSelf.githubUserId"
+                  message: githubUserId is immutable
+              properties:
+                githubUserId:
+                  type: string
+                  minLength: 1
+                limits:
+                  type: object
+                  properties:
+                    active:
+                      type: integer
+                      format: int32
+                      minimum: 0
+                      default: 3
+                    retained:
+                      type: integer
+                      format: int32
+                      minimum: 0
+                      default: 10
+                    storageGiB:
+                      type: integer
+                      format: int64
+                      minimum: 0
+                      default: 200
+            status:
+              type: object
+              properties:
+                reservedActive:
+                  type: integer
+                  format: int32
+                  minimum: 0
+                retained:
+                  type: integer
+                  format: int32
+                  minimum: 0
+                provisionedStorageGiB:
+                  type: integer
+                  format: int64
+                  minimum: 0
+                reservations:
+                  type: array
+                  items:
+                    type: object
+                    required: [id, sandboxName, createdAt]
+                    properties:
+                      id:
+                        type: string
+                        minLength: 1
+                      sandboxName:
+                        type: string
+                        minLength: 1
+                      active:
+                        type: integer
+                        format: int32
+                        minimum: 0
+                      retained:
+                        type: integer
+                        format: int32
+                        minimum: 0
+                      storageGiB:
+                        type: integer
+                        format: int64
+                        minimum: 0
+                      createdAt:
+                        type: string
+                        format: date-time
+                conditions:
+                  type: array
+                  items:
+                    type: object
+                    required: [lastTransitionTime, message, reason, status, type]
+                    properties:
+                      lastTransitionTime:
+                        type: string
+                        format: date-time
+                      message:
+                        type: string
+                      observedGeneration:
+                        type: integer
+                        format: int64
+                      reason:
+                        type: string
+                      status:
+                        type: string
+                        enum: ["True", "False", Unknown]
+                      type:
+                        type: string
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: devsandboxjobs.devsandbox.io
+spec:
+  group: devsandbox.io
+  names:
+    kind: DevSandboxJob
+    listKind: DevSandboxJobList
+    plural: devsandboxjobs
+    shortNames: [dsj]
+    singular: devsandboxjob
+  scope: Namespaced
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      subresources:
+        status: {}
+      schema:
+        openAPIV3Schema:
+          type: object
+          required: [spec]
+          x-kubernetes-validations:
+            - rule: "!has(oldSelf.spec) || self.spec == oldSelf.spec"
+              message: job specs are immutable
+          properties:
+            apiVersion:
+              type: string
+            kind:
+              type: string
+            metadata:
+              type: object
+            spec:
+              type: object
+              required: [sandboxName, githubUserId]
+              properties:
+                sandboxName:
+                  type: string
+                  minLength: 1
+                githubUserId:
+                  type: string
+                  minLength: 1
+            status:
+              type: object
+              properties:
+                state:
+                  type: string
+                  enum: [Pending, Running, Completed, Failed, Stopped]
+                startedAt:
+                  type: string
+                  format: date-time
+                completedAt:
+                  type: string
+                  format: date-time
+                exitCode:
+                  type: integer
+                  format: int32
+                reason:
+                  type: string
+                conditions:
+                  type: array
+                  items:
+                    type: object
+                    required: [lastTransitionTime, message, reason, status, type]
+                    properties:
+                      lastTransitionTime:
+                        type: string
+                        format: date-time
+                      message:
+                        type: string
+                      observedGeneration:
+                        type: integer
+                        format: int64
+                      reason:
+                        type: string
+                      status:
+                        type: string
+                        enum: ["True", "False", Unknown]
+                      type:
+                        type: string

@@ -1,0 +1,120 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: devsandbox-operator-cluster
+rules:
+  - apiGroups: [devsandbox.io]
+    resources: [devsandboxtemplates]
+    verbs: [get, list, watch]
+  - apiGroups: [devsandbox.io]
+    resources: [devsandboxtemplates/status]
+    verbs: [get, patch, update]
+  - apiGroups: [""]
+    resources: [persistentvolumes]
+    verbs: [get, delete]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: devsandbox-operator-cluster
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: devsandbox-operator-cluster
+subjects:
+  - kind: ServiceAccount
+    name: devsandbox-operator
+    namespace: devsandbox-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: devsandbox-operator
+  namespace: devsandbox-workloads
+rules:
+  - apiGroups: [devsandbox.io]
+    resources: [devsandboxes, devsandboxuserquotas, devsandboxjobs]
+    verbs: [get, list, watch, create, patch, update, delete]
+  - apiGroups: [devsandbox.io]
+    resources: [devsandboxes/status, devsandboxuserquotas/status, devsandboxjobs/status]
+    verbs: [get, patch, update]
+  - apiGroups: [devsandbox.io]
+    resources: [devsandboxes/finalizers]
+    verbs: [update]
+  - apiGroups: [agents.x-k8s.io]
+    resources: [sandboxes]
+    verbs: [get, list, watch, create, patch, update, delete]
+  - apiGroups: [""]
+    resources: [persistentvolumeclaims, serviceaccounts]
+    verbs: [get, list, watch, create, patch, update, delete]
+  - apiGroups: [coordination.k8s.io]
+    resources: [leases]
+    verbs: [get, list, watch, create, patch, update, delete]
+  - apiGroups: [""]
+    resources: [events]
+    verbs: [create, patch, update]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: devsandbox-operator
+  namespace: devsandbox-workloads
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: devsandbox-operator
+subjects:
+  - kind: ServiceAccount
+    name: devsandbox-operator
+    namespace: devsandbox-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: kubelet-pvc-metadata
+  namespace: devsandbox-workloads
+rules:
+  - apiGroups: [""]
+    resources: [persistentvolumeclaims]
+    verbs: [get]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: kubelet-pvc-metadata
+  namespace: devsandbox-workloads
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: kubelet-pvc-metadata
+subjects:
+  - kind: Group
+    name: system:nodes
+    apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: devsandbox-operator-leader-election
+  namespace: devsandbox-system
+rules:
+  - apiGroups: [coordination.k8s.io]
+    resources: [leases]
+    verbs: [get, list, watch, create, patch, update]
+  - apiGroups: [""]
+    resources: [events]
+    verbs: [create, patch, update]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: devsandbox-operator-leader-election
+  namespace: devsandbox-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: devsandbox-operator-leader-election
+subjects:
+  - kind: ServiceAccount
+    name: devsandbox-operator
+    namespace: devsandbox-system

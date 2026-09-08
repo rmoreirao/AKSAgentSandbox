@@ -1,0 +1,12 @@
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: devsandbox-standard-ssd
+  labels:
+    app.kubernetes.io/managed-by: devsandbox
+provisioner: disk.csi.azure.com
+parameters:
+  skuName: StandardSSD_LRS
+reclaimPolicy: Delete
+allowVolumeExpansion: true
+volumeBindingMode: WaitForFirstConsumer

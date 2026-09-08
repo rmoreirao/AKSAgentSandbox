@@ -1,0 +1,30 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: devsandbox-legacy-ingress-cleanup
+  namespace: devsandbox-system
+spec:
+  backoffLimit: 2
+  ttlSecondsAfterFinished: 600
+  template:
+    metadata:
+      labels:
+        azure.workload.identity/use: "true"
+    spec:
+      serviceAccountName: devsandbox-bootstrap
+      restartPolicy: Never
+      containers:
+        - name: cleanup
+          image: mcr.microsoft.com/azure-cli@sha256:d41153958a61392a4c9db1591e33b533ca8ab8b59529d212d06bb6ec7e9c1f25
+          command: [/bin/sh, -ec]
+          env:
+            - {name: AZURE_CLIENT_ID, value: "REPLACE_BOOTSTRAP_CLIENT_ID"}
+            - {name: AZURE_TENANT_ID, value: "REPLACE_AZURE_TENANT_ID"}
+            - {name: VAULT_NAME, value: "REPLACE_KEY_VAULT_NAME"}
+          args:
+            - |
+              az login --service-principal --username "$AZURE_CLIENT_ID" --tenant "$AZURE_TENANT_ID" --federated-token "$(cat "$AZURE_FEDERATED_TOKEN_FILE")" --allow-no-subscriptions --only-show-errors >/dev/null
+              if az keyvault certificate show --vault-name "$VAULT_NAME" --name devsandbox-tls --only-show-errors >/dev/null 2>&1; then
+                az keyvault certificate delete --vault-name "$VAULT_NAME" --name devsandbox-tls --only-show-errors >/dev/null
+              fi
+              echo LEGACY_INGRESS_CLEANUP_OK

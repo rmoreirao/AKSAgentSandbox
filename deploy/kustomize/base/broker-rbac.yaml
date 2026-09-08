@@ -1,0 +1,72 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: devsandbox-broker-tokenreview
+rules:
+  - apiGroups: [authentication.k8s.io]
+    resources: [tokenreviews]
+    verbs: [create]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: devsandbox-broker-tokenreview
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: devsandbox-broker-tokenreview
+subjects:
+  - kind: ServiceAccount
+    name: devsandbox-broker
+    namespace: devsandbox-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: devsandbox-broker-bindings
+  namespace: devsandbox-workloads
+rules:
+  - apiGroups: [""]
+    resources: [serviceaccounts, pods]
+    verbs: [get]
+  - apiGroups: [devsandbox.io]
+    resources: [devsandboxes]
+    verbs: [get]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: devsandbox-broker-bindings
+  namespace: devsandbox-workloads
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: devsandbox-broker-bindings
+subjects:
+  - kind: ServiceAccount
+    name: devsandbox-broker
+    namespace: devsandbox-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: devsandbox-broker-leases
+  namespace: devsandbox-system
+rules:
+  - apiGroups: [coordination.k8s.io]
+    resources: [leases]
+    verbs: [get, create, update]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: devsandbox-broker-leases
+  namespace: devsandbox-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: devsandbox-broker-leases
+subjects:
+  - kind: ServiceAccount
+    name: devsandbox-broker
+    namespace: devsandbox-system

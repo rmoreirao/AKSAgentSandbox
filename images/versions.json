@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "asOf": "2026-09-02",
+  "templateVersion": "0.1.0",
+  "baseImages": {
+    "go": "docker.io/library/golang:1.27.0-bookworm@sha256:ded31c68586d2e49e760acc2e65a884b23d032e9bbbed0ae0c55abd3fcaf4452",
+    "node": "docker.io/library/node:24.8.0-bookworm-slim@sha256:cadbfafeb6baf87eaaffa40b3640209c4b7fd38cebde65059d15bc39cd636b85",
+    "ubuntu": "docker.io/library/ubuntu:24.04@sha256:33ceb71981b602c1a7443a53469e4dba065f7503eab3078a2d7a57a2ab987517",
+    "distroless": "gcr.io/distroless/static-debian12:nonroot@sha256:afa5c872c891853ca7fcf1f12c3edb23f7eeef36189728842dd51042ff57f7ab"
+  },
+  "tools": {
+    "codeServer": {
+      "version": "4.135.0",
+      "releaseCommit": "de89acbcdce9d9b870008a270c9f6466993d91f4",
+      "sha256": {
+        "linux-amd64": "300ef4e37e469e6368a4673c6a623e1c9ba8a34f42b394fb49c431a8900bc7d1",
+        "linux-arm64": "fe6561798415e709109cb902dca2a57a687240af7d8220f6fa1d01cd2ae0541e"
+      }
+    },
+    "githubCli": {
+      "version": "2.99.0",
+      "releaseCommit": "d528f20f2ee02f6703773e9f56c90e3c3f5d46b0",
+      "sha256": {
+        "linux-amd64": "ed4960225d2833e04a61590d9fa2b5773d147f3aa375459e5466a40c102f3832",
+        "linux-arm64": "564eff56a61e8caf193efde16937fba879eb62a3a479c9dd6be2001e7647680b"
+      }
+    },
+    "copilotCli": {
+      "version": "1.0.82",
+      "releaseCommit": "024bf28728f3cc82365e0143f44d071ebafbce4d",
+      "sha256": {
+        "linux-amd64": "37fa67686a9e4ed8d46dcd6a9c80ab524dea840ecaa0a3f7edf8d09f961b97a9",
+        "linux-arm64": "86c4c77a91b1ff5dd7313cbea9f861699a2cdceb4696f3864f3f0584e9684e0f"
+      }
+    },
+    "playwrightCli": {
+      "version": "0.1.19",
+      "npmIntegrity": "sha1-jeaRoZwl9JoZUl6Wdrr+jyHg5gQ=",
+      "sha256": "0a6fca06371fa7e69be33f6730f78d7bdd69d037390045c4050e961e8b1dfeee",
+      "playwrightVersion": "1.63.0-alpha-2026-08-31",
+      "playwrightSha256": "e06f5a754cd3aa3151bd23e1b5a2ff5269f731a81904a8106355517999c36bd0",
+      "playwrightCoreSha256": "3d4532e810f39a478ed4924d0189eaf5909d3d02c1ee62bc6c2ff575bdf3d360",
+      "chromiumRevision": "1243",
+      "chromiumVersion": "153.0.8010.12"
+    },
+    "sandboxRouter": {
+      "version": "1.0.0",
+      "sourceCommit": "bb72f49d79f009a960eed2ae6c32e1cc082399c5"
+    }
+  }
+}

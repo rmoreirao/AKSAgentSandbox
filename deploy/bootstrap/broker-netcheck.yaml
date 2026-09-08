@@ -1,0 +1,21 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: broker-netcheck
+  namespace: devsandbox-workloads
+  labels:
+    devsandbox.io/managed: "true"
+spec:
+  restartPolicy: Never
+  containers:
+    - name: broker-netcheck
+      image: curlimages/curl:8.16.0
+      command: [sleep, "120"]
+      volumeMounts:
+        - name: ca
+          mountPath: /ca
+          readOnly: true
+  volumes:
+    - name: ca
+      configMap:
+        name: devsandbox-broker-ca

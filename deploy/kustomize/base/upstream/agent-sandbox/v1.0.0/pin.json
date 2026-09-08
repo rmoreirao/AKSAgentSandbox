@@ -1,0 +1,13 @@
+{
+  "project": "kubernetes-sigs/agent-sandbox",
+  "release": "v1.0.0",
+  "sourceCommit": "bb72f49d79f009a960eed2ae6c32e1cc082399c5",
+  "releaseAsset": {
+    "name": "sandbox.yaml",
+    "sha256": "4535d101df688c00ccca565b4b76d2e87d697913182a6dbb7339a811b59e02d7",
+    "url": "https://github.com/kubernetes-sigs/agent-sandbox/releases/download/v1.0.0/sandbox.yaml"
+  },
+  "controllerImage": "registry.k8s.io/agent-sandbox/agent-sandbox-controller@sha256:bdde1a3150bd385f7318c974c1516e880b4f826b6b51a3e7f127c2f8c95b55cd",
+  "routerDockerfile": "deploy/router/Dockerfile"
+}
+

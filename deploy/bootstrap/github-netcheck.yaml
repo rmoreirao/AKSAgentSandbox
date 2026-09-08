@@ -1,0 +1,35 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: github-netcheck
+  namespace: devsandbox-system
+  labels:
+    app.kubernetes.io/name: github-netcheck
+spec:
+  restartPolicy: Never
+  containers:
+    - name: github-netcheck
+      image: curlimages/curl:8.16.0
+      command: [/bin/sh, -ec]
+      args:
+        - |
+          token="$(cat /run/github/token)"
+          for repo in rmoreirao/AKSAgentSandbox rmoreirao/AKSAgentSandbox-e2e-private; do
+            code="$(curl -sS -o /dev/null -w '%{http_code}' \
+              -H "Authorization: Bearer $token" \
+              -H "Accept: application/vnd.github+json" \
+              "https://api.github.com/repos/$repo")"
+            echo "$repo=$code"
+          done
+      volumeMounts:
+        - name: github-token
+          mountPath: /run/github
+          readOnly: true
+  volumes:
+    - name: github-token
+      secret:
+        secretName: devsandbox-runtime-secrets
+        items:
+          - key: github-static-token
+            path: token
+            mode: 0444

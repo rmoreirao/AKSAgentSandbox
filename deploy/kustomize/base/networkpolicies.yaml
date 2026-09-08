@@ -1,0 +1,226 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-ingress
+  namespace: devsandbox-system
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-ingress
+  namespace: devsandbox-workloads
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: kubelet-health-probes
+  namespace: devsandbox-system
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - ipBlock:
+            cidr: 10.240.0.0/20
+      ports:
+        - {port: 8080, protocol: TCP}
+        - {port: 8081, protocol: TCP}
+        - {port: 8443, protocol: TCP}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: gateway-frontdoor-http-and-health
+  namespace: devsandbox-system
+spec:
+  podSelector:
+    matchLabels:
+      gateway.networking.k8s.io/gateway-name: devsandbox
+  policyTypes:
+    - Ingress
+  ingress:
+    - ports:
+        - port: 80
+          protocol: TCP
+    - from:
+        - ipBlock:
+            cidr: 168.63.129.16/32
+      ports:
+        - port: 15021
+          protocol: TCP
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: gateway-to-api
+  namespace: devsandbox-system
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: devsandbox-api
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              gateway.networking.k8s.io/gateway-name: devsandbox
+      ports:
+        - port: 8080
+          protocol: TCP
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: gateway-to-web
+  namespace: devsandbox-system
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: devsandbox-web
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              gateway.networking.k8s.io/gateway-name: devsandbox
+      ports:
+        - port: 8080
+          protocol: TCP
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: api-to-web-health
+  namespace: devsandbox-system
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: devsandbox-web
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: devsandbox-api
+      ports:
+        - port: 8080
+          protocol: TCP
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: web-to-api-exchange
+  namespace: devsandbox-system
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: devsandbox-api
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: devsandbox-web
+      ports:
+        - port: 8081
+          protocol: TCP
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: api-web-to-router
+  namespace: devsandbox-system
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: sandbox-router
+      app.kubernetes.io/component: router
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchExpressions:
+              - key: app.kubernetes.io/name
+                operator: In
+                values:
+                  - devsandbox-api
+                  - devsandbox-web
+      ports:
+        - port: 8080
+          protocol: TCP
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: workloads-to-broker
+  namespace: devsandbox-system
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: devsandbox-broker
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: devsandbox-workloads
+      ports:
+        - port: 8443
+          protocol: TCP
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: kubelet-sandbox-health-probes
+  namespace: devsandbox-workloads
+spec:
+  podSelector:
+    matchExpressions:
+      - key: agents.x-k8s.io/sandbox-name-hash
+        operator: Exists
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - ipBlock:
+            cidr: 10.240.0.0/20
+      ports:
+        - port: 8081
+          protocol: TCP
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: router-only-sandbox-ingress
+  namespace: devsandbox-workloads
+spec:
+  podSelector:
+    matchExpressions:
+      - key: agents.x-k8s.io/sandbox-name-hash
+        operator: Exists
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: devsandbox-system
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: sandbox-router
+              app.kubernetes.io/component: router

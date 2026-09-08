@@ -1,0 +1,103 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../base
+
+configMapGenerator:
+  - name: devsandbox-poc-config
+    namespace: devsandbox-system
+    literals:
+      - apiOriginHostname=api-origin.example.internal
+      - webOriginHostname=web-origin.example.internal
+      - webBaseUrl=https://web-endpoint.azurefd.net
+      - frontDoorId=00000000-0000-0000-0000-000000000000
+      - apiIdentityClientId=00000000-0000-0000-0000-000000000001
+      - brokerIdentityClientId=00000000-0000-0000-0000-000000000002
+
+generatorOptions:
+  disableNameSuffixHash: true
+  annotations:
+    config.kubernetes.io/local-config: "true"
+
+images:
+  - name: example.invalid/devsandbox/sandbox-router
+    newName: example.invalid/devsandbox/sandbox-router
+    digest: sha256:1111111111111111111111111111111111111111111111111111111111111111
+
+replacements:
+  - source:
+      kind: ConfigMap
+      name: devsandbox-poc-config
+      fieldPath: data.apiOriginHostname
+    targets:
+      - select:
+          kind: Gateway
+          name: devsandbox
+        fieldPaths:
+          - spec.listeners.[name=api-http].hostname
+      - select:
+          kind: HTTPRoute
+          name: devsandbox-api
+        fieldPaths:
+          - spec.hostnames.0
+  - source:
+      kind: ConfigMap
+      name: devsandbox-poc-config
+      fieldPath: data.webOriginHostname
+    targets:
+      - select:
+          kind: Gateway
+          name: devsandbox
+        fieldPaths:
+          - spec.listeners.[name=web-http].hostname
+      - select:
+          kind: HTTPRoute
+          name: devsandbox-web
+        fieldPaths:
+          - spec.hostnames.0
+  - source:
+      kind: ConfigMap
+      name: devsandbox-poc-config
+      fieldPath: data.webBaseUrl
+    targets:
+      - select:
+          kind: ConfigMap
+          name: devsandbox-management-config
+        fieldPaths:
+          - data.webBaseUrl
+  - source:
+      kind: ConfigMap
+      name: devsandbox-poc-config
+      fieldPath: data.frontDoorId
+    targets:
+      - select:
+          kind: HTTPRoute
+          name: devsandbox-api
+        fieldPaths:
+          - spec.rules.0.matches.0.headers.0.value
+      - select:
+          kind: HTTPRoute
+          name: devsandbox-web
+        fieldPaths:
+          - spec.rules.0.matches.0.headers.0.value
+  - source:
+      kind: ConfigMap
+      name: devsandbox-poc-config
+      fieldPath: data.apiIdentityClientId
+    targets:
+      - select:
+          kind: ServiceAccount
+          name: devsandbox-api
+        fieldPaths:
+          - metadata.annotations.[azure.workload.identity/client-id]
+  - source:
+      kind: ConfigMap
+      name: devsandbox-poc-config
+      fieldPath: data.brokerIdentityClientId
+    targets:
+      - select:
+          kind: ServiceAccount
+          name: devsandbox-broker
+        fieldPaths:
+          - metadata.annotations.[azure.workload.identity/client-id]

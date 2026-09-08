@@ -1,0 +1,86 @@
+# Operator-rendered runtime fragment. SANDBOX_UID is replaced with the owning
+# DevSandbox UID; no Role or RoleBinding is created for this account.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: devsandbox-${SANDBOX_UID}
+  namespace: devsandbox-workloads
+automountServiceAccountToken: false
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: devsandbox-${SANDBOX_UID}
+  namespace: devsandbox-workloads
+spec:
+  serviceAccountName: devsandbox-${SANDBOX_UID}
+  automountServiceAccountToken: false
+  runtimeClassName: kata-vm-isolation
+  securityContext:
+    runAsNonRoot: true
+    seccompProfile:
+      type: RuntimeDefault
+  volumes:
+    - name: workspace
+      persistentVolumeClaim:
+        claimName: devsandbox-${SANDBOX_UID}
+    - name: runtime
+      emptyDir:
+        medium: Memory
+        sizeLimit: 16Mi
+    - name: broker-identity
+      projected:
+        defaultMode: 0400
+        sources:
+          - serviceAccountToken:
+              audience: devsandbox-credential-broker
+              expirationSeconds: 600
+              path: token
+  initContainers:
+    - name: devsandbox-init
+      image: ${DEVSANDBOX_IMAGE_DIGEST}
+      command: ["/usr/local/bin/devsandbox-init"]
+      securityContext:
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop: ["ALL"]
+      volumeMounts:
+        - name: workspace
+          mountPath: /workspace
+        - name: runtime
+          mountPath: /run/devsandbox
+        - name: broker-identity
+          mountPath: /var/run/secrets/devsandbox/broker
+          readOnly: true
+  containers:
+    - name: workspace
+      image: ${DEVSANDBOX_IMAGE_DIGEST}
+      command: ["/usr/local/bin/devsandbox-agent"]
+      ports:
+        - name: agent
+          containerPort: 8081
+      livenessProbe:
+        httpGet: {path: /healthz, port: agent}
+      readinessProbe:
+        httpGet: {path: /readyz, port: agent}
+      env:
+        - name: DEVSANDBOX_SANDBOX_UID
+          value: ${SANDBOX_UID}
+        - name: DEVSANDBOX_SERVICE_ACCOUNT_NAME
+          value: devsandbox-${SANDBOX_UID}
+        - name: DEVSANDBOX_BROKER_AUDIENCE
+          value: devsandbox-credential-broker
+        - name: DEVSANDBOX_BROKER_URL
+          value: https://devsandbox-broker.devsandbox-system.svc.cluster.local/v1/credential
+      securityContext:
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop: ["ALL"]
+      volumeMounts:
+        - name: workspace
+          mountPath: /workspace
+        - name: runtime
+          mountPath: /run/devsandbox
+        - name: broker-identity
+          mountPath: /var/run/secrets/devsandbox/broker
+          readOnly: true

@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+token_file="${DEVSANDBOX_GITHUB_TOKEN_FILE:-/run/devsandbox/github-token}"
+unset GH_TOKEN GITHUB_TOKEN
+if [[ -r "${token_file}" ]]; then
+  GH_TOKEN="$(cat "${token_file}")"
+  if [[ -z "${GH_TOKEN}" ]]; then
+    echo "GitHub authentication unavailable: current runtime credential is empty" >&2
+    exit 1
+  fi
+  export GH_TOKEN
+  GH_CONFIG_DIR="$(dirname "${token_file}")/gh"
+  mkdir -p -m 0700 "${GH_CONFIG_DIR}"
+  export GH_CONFIG_DIR
+fi
+exec /usr/local/libexec/gh "$@"

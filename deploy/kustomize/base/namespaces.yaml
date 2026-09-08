@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: devsandbox-system
+  labels:
+    app.kubernetes.io/part-of: devsandbox
+    devsandbox.io/trust: system
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: devsandbox-workloads
+  labels:
+    app.kubernetes.io/part-of: devsandbox
+    devsandbox.io/trust: workload
+

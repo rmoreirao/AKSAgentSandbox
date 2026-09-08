@@ -1,0 +1,303 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: devsandbox-management-config
+  namespace: devsandbox-system
+data:
+  systemNamespace: devsandbox-system
+  workloadNamespace: devsandbox-workloads
+  routerUrl: http://sandbox-router.devsandbox-system.svc.cluster.local:8080
+  exchangeUrl: http://devsandbox-api-exchange.devsandbox-system.svc.cluster.local:8081/v1/vscode/exchange
+  webBaseUrl: https://sandbox.example.invalid
+  keyVaultUrl: https://example-vault.vault.azure.net
+  keyVaultSigningKeyId: https://example-vault.vault.azure.net/keys/devsandbox-route-signing
+  githubAppClientId: replace-at-deploy
+  githubAuthMode: replace-at-deploy
+  primaryGithubOrg: replace-at-deploy
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: devsandbox-route-public-key
+  namespace: devsandbox-system
+data:
+  public.pem: |
+    REPLACE_WITH_KEY_VAULT_RSA_PUBLIC_KEY
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: devsandbox-api
+  namespace: devsandbox-system
+  labels:
+    app.kubernetes.io/name: devsandbox-api
+    app.kubernetes.io/component: management-api
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: devsandbox-api
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: devsandbox-api
+        app.kubernetes.io/component: management-api
+        azure.workload.identity/use: "true"
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: /metrics
+    spec:
+      serviceAccountName: devsandbox-api
+      automountServiceAccountToken: true
+      nodeSelector:
+        kubernetes.azure.com/mode: system
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                topologyKey: kubernetes.io/hostname
+                labelSelector:
+                  matchLabels:
+                    app.kubernetes.io/name: devsandbox-api
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: api
+          image: example.invalid/devsandbox/devsandbox-api@sha256:1111111111111111111111111111111111111111111111111111111111111111
+          ports:
+            - name: http
+              containerPort: 8080
+            - name: exchange
+              containerPort: 8081
+          env:
+            - name: DEVSANDBOX_SYSTEM_NAMESPACE
+              valueFrom: {configMapKeyRef: {name: devsandbox-management-config, key: systemNamespace}}
+            - name: DEVSANDBOX_WORKLOAD_NAMESPACE
+              valueFrom: {configMapKeyRef: {name: devsandbox-management-config, key: workloadNamespace}}
+            - name: DEVSANDBOX_ROUTER_URL
+              valueFrom: {configMapKeyRef: {name: devsandbox-management-config, key: routerUrl}}
+            - name: DEVSANDBOX_WEB_BASE_URL
+              valueFrom: {configMapKeyRef: {name: devsandbox-management-config, key: webBaseUrl}}
+            - name: DEVSANDBOX_WEB_READINESS_URL
+              value: http://devsandbox-web.devsandbox-system.svc.cluster.local:8080/healthz
+            - name: DEVSANDBOX_KEY_VAULT_URL
+              valueFrom: {configMapKeyRef: {name: devsandbox-management-config, key: keyVaultUrl}}
+            - name: DEVSANDBOX_KEY_VAULT_SIGNING_KEY_ID
+              valueFrom: {configMapKeyRef: {name: devsandbox-management-config, key: keyVaultSigningKeyId}}
+            - name: DEVSANDBOX_GITHUB_APP_CLIENT_ID
+              valueFrom: {configMapKeyRef: {name: devsandbox-management-config, key: githubAppClientId}}
+            - name: DEVSANDBOX_GITHUB_AUTH_MODE
+              valueFrom: {configMapKeyRef: {name: devsandbox-management-config, key: githubAuthMode}}
+            - name: DEVSANDBOX_PRIMARY_GITHUB_ORG
+              valueFrom: {configMapKeyRef: {name: devsandbox-management-config, key: primaryGithubOrg}}
+            - name: DEVSANDBOX_GITHUB_APP_CLIENT_SECRET
+              valueFrom: {secretKeyRef: {name: devsandbox-runtime-secrets, key: github-app-client-secret, optional: true}}
+            - name: DEVSANDBOX_GITHUB_STATIC_USER_ID
+              valueFrom: {secretKeyRef: {name: devsandbox-runtime-secrets, key: github-static-user-id, optional: true}}
+            - name: DEVSANDBOX_GITHUB_STATIC_LOGIN
+              valueFrom: {secretKeyRef: {name: devsandbox-runtime-secrets, key: github-static-login, optional: true}}
+            - name: DEVSANDBOX_GITHUB_STATIC_TOKEN_FILE
+              value: /run/devsandbox/github/token
+          volumeMounts:
+            - name: github-static-token
+              mountPath: /run/devsandbox/github
+              readOnly: true
+          livenessProbe:
+            httpGet: {path: /healthz, port: http}
+            periodSeconds: 10
+          readinessProbe:
+            httpGet: {path: /readyz, port: http}
+            periodSeconds: 5
+            timeoutSeconds: 5
+          resources:
+            requests: {cpu: 100m, memory: 128Mi}
+            limits: {cpu: 1, memory: 512Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: {drop: [ALL]}
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+      terminationGracePeriodSeconds: 30
+      volumes:
+        - name: github-static-token
+          secret:
+            secretName: devsandbox-runtime-secrets
+            items:
+              - key: github-static-token
+                path: token
+                mode: 0444
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: devsandbox-web
+  namespace: devsandbox-system
+  labels:
+    app.kubernetes.io/name: devsandbox-web
+    app.kubernetes.io/component: sandbox-web
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: devsandbox-web
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: devsandbox-web
+        app.kubernetes.io/component: sandbox-web
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: /metrics
+    spec:
+      serviceAccountName: devsandbox-web
+      automountServiceAccountToken: false
+      nodeSelector:
+        kubernetes.azure.com/mode: system
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                topologyKey: kubernetes.io/hostname
+                labelSelector:
+                  matchLabels:
+                    app.kubernetes.io/name: devsandbox-web
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: web
+          image: example.invalid/devsandbox/devsandbox-web@sha256:1111111111111111111111111111111111111111111111111111111111111111
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            - name: DEVSANDBOX_ROUTER_URL
+              valueFrom: {configMapKeyRef: {name: devsandbox-management-config, key: routerUrl}}
+            - name: DEVSANDBOX_INTERNAL_EXCHANGE_URL
+              valueFrom: {configMapKeyRef: {name: devsandbox-management-config, key: exchangeUrl}}
+            - name: DEVSANDBOX_ROUTE_PUBLIC_KEY_FILE
+              value: /etc/devsandbox/route/public.pem
+          volumeMounts:
+            - name: route-public-key
+              mountPath: /etc/devsandbox/route
+              readOnly: true
+          livenessProbe:
+            httpGet: {path: /healthz, port: http}
+            periodSeconds: 10
+          readinessProbe:
+            httpGet: {path: /readyz, port: http}
+            periodSeconds: 5
+            timeoutSeconds: 5
+          resources:
+            requests: {cpu: 100m, memory: 64Mi}
+            limits: {cpu: 500m, memory: 256Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: {drop: [ALL]}
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+      volumes:
+        - name: route-public-key
+          configMap:
+            name: devsandbox-route-public-key
+      terminationGracePeriodSeconds: 30
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: devsandbox-broker
+  namespace: devsandbox-system
+  labels:
+    app.kubernetes.io/name: devsandbox-broker
+    app.kubernetes.io/component: credential-broker
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: devsandbox-broker
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: devsandbox-broker
+        app.kubernetes.io/component: credential-broker
+        azure.workload.identity/use: "true"
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8443"
+        prometheus.io/path: /metrics
+        prometheus.io/scheme: https
+    spec:
+      serviceAccountName: devsandbox-broker
+      automountServiceAccountToken: true
+      nodeSelector:
+        kubernetes.azure.com/mode: system
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: broker
+          image: example.invalid/devsandbox/devsandbox-broker@sha256:1111111111111111111111111111111111111111111111111111111111111111
+          ports:
+            - name: https
+              containerPort: 8443
+          env:
+            - name: DEVSANDBOX_SYSTEM_NAMESPACE
+              valueFrom: {configMapKeyRef: {name: devsandbox-management-config, key: systemNamespace}}
+            - name: DEVSANDBOX_KEY_VAULT_URL
+              valueFrom: {configMapKeyRef: {name: devsandbox-management-config, key: keyVaultUrl}}
+            - name: DEVSANDBOX_GITHUB_APP_CLIENT_ID
+              valueFrom: {configMapKeyRef: {name: devsandbox-management-config, key: githubAppClientId}}
+            - name: DEVSANDBOX_GITHUB_AUTH_MODE
+              valueFrom: {configMapKeyRef: {name: devsandbox-management-config, key: githubAuthMode}}
+            - name: DEVSANDBOX_GITHUB_APP_CLIENT_SECRET
+              valueFrom: {secretKeyRef: {name: devsandbox-runtime-secrets, key: github-app-client-secret, optional: true}}
+            - name: DEVSANDBOX_BROKER_TLS_CERT_FILE
+              value: /etc/devsandbox/tls/tls.crt
+            - name: DEVSANDBOX_BROKER_TLS_KEY_FILE
+              value: /etc/devsandbox/tls/tls.key
+            - name: DEVSANDBOX_GITHUB_STATIC_USER_ID
+              valueFrom: {secretKeyRef: {name: devsandbox-runtime-secrets, key: github-static-user-id, optional: true}}
+            - name: DEVSANDBOX_GITHUB_STATIC_TOKEN_FILE
+              value: /run/devsandbox/github/token
+          volumeMounts:
+            - name: broker-tls
+              mountPath: /etc/devsandbox/tls
+              readOnly: true
+            - name: github-static-token
+              mountPath: /run/devsandbox/github
+              readOnly: true
+          livenessProbe:
+            httpGet: {path: /healthz, port: https, scheme: HTTPS}
+            periodSeconds: 10
+          readinessProbe:
+            httpGet: {path: /readyz, port: https, scheme: HTTPS}
+            periodSeconds: 5
+            timeoutSeconds: 5
+          resources:
+            requests: {cpu: 100m, memory: 128Mi}
+            limits: {cpu: 500m, memory: 256Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: {drop: [ALL]}
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+      volumes:
+        - name: broker-tls
+          secret:
+            secretName: devsandbox-broker-tls
+        - name: github-static-token
+          secret:
+            secretName: devsandbox-runtime-secrets
+            items:
+              - key: github-static-token
+                path: token
+                mode: 0444
+      terminationGracePeriodSeconds: 30

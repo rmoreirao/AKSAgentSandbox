@@ -1,0 +1,102 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: devsandbox-gateway-options
+  namespace: devsandbox-system
+data:
+  deployment: |
+    spec:
+      template:
+        spec:
+          affinity:
+            nodeAffinity:
+              requiredDuringSchedulingIgnoredDuringExecution:
+                nodeSelectorTerms:
+                  - matchExpressions:
+                      - key: kubernetes.azure.com/mode
+                        operator: In
+                        values:
+                          - system
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: devsandbox
+  namespace: devsandbox-system
+  labels:
+    app.kubernetes.io/name: devsandbox-gateway
+    app.kubernetes.io/part-of: devsandbox
+spec:
+  gatewayClassName: approuting-istio
+  infrastructure:
+    parametersRef:
+      group: ""
+      kind: ConfigMap
+      name: devsandbox-gateway-options
+  listeners:
+    - name: api-http
+      hostname: api-origin.example.internal
+      port: 80
+      protocol: HTTP
+      allowedRoutes:
+        namespaces:
+          from: Same
+    - name: web-http
+      hostname: web-origin.example.internal
+      port: 80
+      protocol: HTTP
+      allowedRoutes:
+        namespaces:
+          from: Same
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: devsandbox-api
+  namespace: devsandbox-system
+  labels:
+    app.kubernetes.io/name: devsandbox-api
+spec:
+  parentRefs:
+    - name: devsandbox
+      sectionName: api-http
+  hostnames:
+    - api-origin.example.internal
+  rules:
+    - matches:
+        - headers:
+            - type: Exact
+              name: X-Azure-FDID
+              value: 00000000-0000-0000-0000-000000000000
+          path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - name: devsandbox-api
+          port: 8080
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: devsandbox-web
+  namespace: devsandbox-system
+  labels:
+    app.kubernetes.io/name: devsandbox-web
+spec:
+  parentRefs:
+    - name: devsandbox
+      sectionName: web-http
+  hostnames:
+    - web-origin.example.internal
+  rules:
+    - matches:
+        - headers:
+            - type: Exact
+              name: X-Azure-FDID
+              value: 00000000-0000-0000-0000-000000000000
+          path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - name: devsandbox-web
+          port: 8080

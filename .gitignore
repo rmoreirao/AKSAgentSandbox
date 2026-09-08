@@ -1,0 +1,26 @@
+# Go build and test output
+bin/
+*.exe
+*.test
+*.out
+coverage.*
+artifacts/
+
+# Node and Playwright output
+node_modules/
+playwright-report/
+test-results/
+.playwright-cli/
+
+# Local tooling and environment
+.tools/
+.env
+.env.*
+!.env.example
+
+# Editors and operating systems
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db

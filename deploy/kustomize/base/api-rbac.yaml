@@ -1,0 +1,81 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: devsandbox-api-templates
+rules:
+  - apiGroups: [devsandbox.io]
+    resources: [devsandboxtemplates]
+    verbs: [get, list, watch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: devsandbox-api-templates
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: devsandbox-api-templates
+subjects:
+  - kind: ServiceAccount
+    name: devsandbox-api
+    namespace: devsandbox-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: devsandbox-api
+  namespace: devsandbox-workloads
+rules:
+  - apiGroups: [devsandbox.io]
+    resources: [devsandboxes]
+    verbs: [get, list, watch, create, update, patch, delete]
+  - apiGroups: [devsandbox.io]
+    resources: [devsandboxjobs]
+    verbs: [get, list, watch, create, update, patch, delete]
+  - apiGroups: [devsandbox.io]
+    resources: [devsandboxjobs/status]
+    verbs: [get, update, patch]
+  - apiGroups: [coordination.k8s.io]
+    resources: [leases]
+    verbs: [get, update, patch]
+  - apiGroups: [""]
+    resources: [events]
+    verbs: [get, list, watch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: devsandbox-api
+  namespace: devsandbox-workloads
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: devsandbox-api
+subjects:
+  - kind: ServiceAccount
+    name: devsandbox-api
+    namespace: devsandbox-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: devsandbox-api-leases
+  namespace: devsandbox-system
+rules:
+  - apiGroups: [coordination.k8s.io]
+    resources: [leases]
+    verbs: [get, create, update, delete]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: devsandbox-api-leases
+  namespace: devsandbox-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: devsandbox-api-leases
+subjects:
+  - kind: ServiceAccount
+    name: devsandbox-api
+    namespace: devsandbox-system
