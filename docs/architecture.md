@@ -10,55 +10,58 @@ specification.
 
 ```mermaid
 flowchart TB
-    Developer["Developer<br/>DevSandbox CLI or browser"]
+    Developer["Developer<br/>CLI or browser"]
     GitHub["GitHub"]
-    AFD["Azure Front Door Standard<br/>separate API and web endpoints"]
+    AFD["Azure Front Door<br/>API + web endpoints"]
+    ACR["Container Registry"]
+    KV["Key Vault<br/>private endpoint"]
+    Monitor["Log Analytics<br/>Azure Monitor"]
 
-    subgraph Azure["Azure resource group"]
-        LAW["Log Analytics<br/>and Azure Monitor"]
-        ACR["Azure Container Registry"]
-        KV["Azure Key Vault<br/>private endpoint"]
+    subgraph AKS["Private AKS cluster"]
+        direction TB
+        Gateway["Gateway API<br/>system pool"]
+        API["Management API"]
+        Web["Web gateway"]
+        Resource["DevSandbox CR"]
+        Operator["Operator"]
+        Router["Sandbox Router"]
+        Broker["Credential broker"]
+        Sandbox["Sandbox pod<br/>Kata pool"]
+        Workspace[("Workspace PVC")]
 
-        subgraph VNet["Virtual network"]
-            subgraph AKS["Private AKS cluster"]
-                KubeAPI["Private Kubernetes API"]
-
-                subgraph SystemPool["System node pool"]
-                    Gateway["AKS Gateway API<br/>Front Door restricted origin"]
-                    API["Management API"]
-                    Web["Web gateway"]
-                    Operator["DevSandbox operator"]
-                    Broker["Credential broker"]
-                    Router["Sandbox Router"]
-                end
-
-                subgraph KataPool["Kata VM isolation node pool"]
-                    Sandbox["Sandbox pod<br/>init + agent + tools"]
-                    Workspace[("Persistent workspace")]
-                    Sandbox --- Workspace
-                end
-            end
-        end
+        Gateway --> API
+        Gateway --> Web
+        API -->|"create / update"| Resource
+        Resource -->|"watch"| Operator
+        API --> Router
+        Web --> Router
+        Router --> Sandbox
+        Operator -->|"provision"| Sandbox
+        Sandbox -->|"projected identity"| Broker
+        Sandbox --- Workspace
     end
 
     Developer -->|"HTTPS / WebSocket"| AFD
     AFD --> Gateway
-    Gateway --> API
-    Gateway --> Web
-    API -->|"DevSandbox resources"| KubeAPI
-    KubeAPI -->|"watch"| Operator
-    Operator -->|"reconcile"| KubeAPI
-    API --> Router
-    Web --> Router
-    KubeAPI --> Sandbox
-    Router --> Sandbox
     Sandbox -->|"short-lived repository access"| GitHub
-    API --> KV
-    Broker --> KV
-    Sandbox --> Broker
-    ACR --> AKS
-    AKS --> LAW
-    AFD --> LAW
+    ACR -. images .-> Sandbox
+    API -. signing and refresh .-> KV
+    Broker -. short-lived credential .-> KV
+    API -. logs and metrics .-> Monitor
+
+    classDef external fill:#F3F2F1,stroke:#605E5C,color:#000000
+    classDef edge fill:#CFE4FA,stroke:#0078D4,color:#000000
+    classDef system fill:#E8DAEF,stroke:#5C2D91,color:#000000
+    classDef sandbox fill:#DFF6DD,stroke:#107C10,color:#000000
+    classDef service fill:#FFF4CE,stroke:#F7630C,color:#000000
+
+    class Developer,GitHub external
+    class AFD,Gateway edge
+    class API,Web,Resource,Operator,Router,Broker system
+    class Sandbox,Workspace sandbox
+    class ACR,KV,Monitor service
+
+    style AKS fill:transparent,stroke:#5C2D91,stroke-width:2px
 ```
 
 `infra/foundation.bicep` creates the resource group and composes the
