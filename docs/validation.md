@@ -151,6 +151,6 @@ authenticated `gh` token through the owner-bound static validation provider,
 and the CLI exchanges the current in-memory `gh` credential for a short-lived
 platform session automatically. Only the platform session is cached in the OS
 keyring.
-Copilot inference remains **Blocked** if that token/account receives 403 from
-GitHub's Copilot entitlement endpoint; tool versions, Chromium, tmpfs
-credentials, and stop/resume cleanup are still validated.
+The Copilot wrapper validates the supported GitHub `/user` endpoint, injects the
+credential only into the Copilot process, and delegates entitlement handling to
+Copilot CLI. It does not call GitHub's private Copilot token endpoint.

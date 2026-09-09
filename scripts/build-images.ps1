@@ -13,6 +13,7 @@ $PSNativeCommandUseErrorActionPreference = $true
 $root = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $metadataPath = Join-Path $root 'images\versions.json'
 $metadata = Get-Content -Raw -LiteralPath $metadataPath | ConvertFrom-Json
+$versionWasSpecified = -not [string]::IsNullOrWhiteSpace($Version)
 if ([string]::IsNullOrWhiteSpace($Version)) {
     $Version = $metadata.templateVersion
 }
@@ -70,6 +71,7 @@ function Assert-StaticInputs {
         $metadata.tools.playwrightCli.sha256,
         $metadata.tools.sandboxRouter.sourceCommit
     )
+    $expectedPins += @($metadata.templateVersions.PSObject.Properties.Value)
     foreach ($pin in $expectedPins) {
         if (-not $allDockerfiles.Contains([string]$pin)) {
             throw "Version metadata pin is not present in a Dockerfile: $pin"
@@ -112,18 +114,29 @@ function Get-Tag([string]$name) {
     if (-not [string]::IsNullOrWhiteSpace($Registry)) {
         $repository = "$($Registry.TrimEnd('/'))/$repository"
     }
-    return "${repository}:$Version"
+    return "${repository}:$(Get-ImageVersion $name)"
+}
+
+function Get-ImageVersion([string]$name) {
+    if (-not $versionWasSpecified) {
+        $specificVersion = $metadata.templateVersions.PSObject.Properties[$name].Value
+        if (-not [string]::IsNullOrWhiteSpace([string]$specificVersion)) {
+            return [string]$specificVersion
+        }
+    }
+    return $Version
 }
 
 function Build-Image([string]$name, [string]$dockerfile, [string[]]$ExtraArgs = @()) {
     $tag = Get-Tag $name
+    $imageVersion = Get-ImageVersion $name
     $arguments = @(
         'build', '--pull',
         '--file', (Join-Path $root $dockerfile),
         '--tag', $tag,
         '--build-arg', "BUILD_DATE=$buildDate",
         '--build-arg', "REVISION=$revision",
-        '--build-arg', "TEMPLATE_VERSION=$Version"
+        '--build-arg', "TEMPLATE_VERSION=$imageVersion"
     ) + $ExtraArgs + @($root)
     Invoke-Native docker $arguments
     return $tag
@@ -215,6 +228,11 @@ try {
     $result = [ordered]@{
         schemaVersion = 1
         version = $Version
+        versions = [ordered]@{
+            standard = (Get-ImageVersion 'standard')
+            vscode = (Get-ImageVersion 'vscode')
+            copilot = (Get-ImageVersion 'copilot')
+        }
         revision = $revision
         buildDate = $buildDate
         images = [ordered]@{}

@@ -1,6 +1,5 @@
 function Invoke-CopilotTemplateScenario {
     $name = $null
-    $entitlementBlocked = $false
     $metadata = Get-Content -Raw -LiteralPath (Join-Path $PSScriptRoot '..\images\versions.json') |
         ConvertFrom-Json
     $identity = Invoke-API Get '/v1/me' $null
@@ -58,18 +57,11 @@ function Invoke-CopilotTemplateScenario {
             throw 'GitHub CLI authenticated as a different platform user'
         }
 
-        $auth = Invoke-CopilotExec copilot @(
-            '-p', 'Reply with exactly: DEVSANDBOX_COPILOT_AUTH_OK'
-        ) -AllowFailure
+        $auth = Invoke-CopilotExec copilot @('-p', 'Reply with exactly: DEVSANDBOX_COPILOT_AUTH_OK')
         if ($auth.ExitCode -ne 0) {
-            if ($auth.Stderr -like 'GitHub Copilot entitlement required:*') {
-                $entitlementBlocked = $true
-            }
-            else {
-                throw 'Copilot noninteractive authentication failed without starting an interactive login'
-            }
+            throw 'Copilot noninteractive authentication failed without starting an interactive login'
         }
-        if (-not $entitlementBlocked -and $auth.Stdout -notmatch 'DEVSANDBOX_COPILOT_AUTH_OK') {
+        if ($auth.Stdout -notmatch 'DEVSANDBOX_COPILOT_AUTH_OK') {
             throw 'Copilot authenticated but returned an unexpected noninteractive response'
         }
         if (($auth.Stdout + $auth.Stderr) -match 'github\.com/login/device|one-time code') {
@@ -114,10 +106,5 @@ const { chromium } = require('/usr/local/lib/node_modules/@playwright/cli/node_m
         }
     }
     Write-Output 'Passed: Copilot template tools, Chromium, tmpfs credentials, and stop/resume cleanup'
-    if ($entitlementBlocked) {
-        Write-Output 'Blocked: Copilot inference (the authenticated GitHub user token has no Copilot CLI entitlement)'
-    }
-    else {
-        Write-Output 'Passed: Copilot noninteractive inference'
-    }
+    Write-Output 'Passed: Copilot noninteractive inference'
 }

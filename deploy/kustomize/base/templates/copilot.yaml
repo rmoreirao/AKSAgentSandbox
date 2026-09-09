@@ -4,11 +4,11 @@ metadata:
   name: copilot
   labels:
     app.kubernetes.io/managed-by: devsandbox
-    devsandbox.io/template-version: 0.1.0
+    devsandbox.io/template-version: 0.1.1
 spec:
   displayName: Copilot
   description: Standard DevSandbox environment with GitHub CLI, Copilot CLI, and Playwright Chromium.
-  version: 0.1.0
+  version: 0.1.1
   image:
     repository: example.invalid/devsandbox/copilot
     digest: sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
@@ -20,4 +20,3 @@ spec:
     vscode: false
     copilot: true
     playwright: true
-

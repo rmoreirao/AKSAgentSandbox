@@ -19,10 +19,6 @@ const (
 	DefaultAPIURL    = "https://api.github.com"
 )
 
-var ErrEntitlementRequired = errors.New(
-	"GitHub Copilot entitlement required: the authenticated GitHub user cannot use Copilot CLI",
-)
-
 type Config struct {
 	TokenFile string
 	APIURL    string
@@ -30,7 +26,7 @@ type Config struct {
 }
 
 // Prepare obtains the current runtime credential for one Copilot process,
-// verifies its identity and entitlement, and returns a process-only environment.
+// verifies its GitHub identity, and returns a process-only environment.
 func (c Config) Prepare(ctx context.Context, args, environ []string) ([]string, error) {
 	clean := withoutAuthentication(environ)
 	if informationalInvocation(args) {
@@ -86,20 +82,7 @@ func (c Config) preflight(ctx context.Context, token string) error {
 		return fmt.Errorf("Copilot authentication unavailable: GitHub rejected the runtime credential (status %d)", status)
 	}
 
-	status, err = requestStatus(
-		ctx, client, strings.TrimRight(base, "/")+"/copilot_internal/v2/token", "token", token,
-	)
-	if err != nil {
-		return errors.New("Copilot authentication unavailable: Copilot entitlement could not be verified")
-	}
-	switch status {
-	case http.StatusOK:
-		return nil
-	case http.StatusUnauthorized, http.StatusForbidden:
-		return ErrEntitlementRequired
-	default:
-		return fmt.Errorf("Copilot authentication unavailable: entitlement service returned status %d", status)
-	}
+	return nil
 }
 
 func requestStatus(ctx context.Context, client *http.Client, endpoint, scheme, token string) (int, error) {

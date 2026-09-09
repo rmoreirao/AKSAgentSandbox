@@ -1,7 +1,12 @@
 {
   "schemaVersion": 1,
-  "asOf": "2026-09-02",
+  "asOf": "2026-09-08",
   "templateVersion": "0.1.0",
+  "templateVersions": {
+    "standard": "0.1.0",
+    "vscode": "0.1.0",
+    "copilot": "0.1.1"
+  },
   "baseImages": {
     "go": "docker.io/library/golang:1.27.0-bookworm@sha256:ded31c68586d2e49e760acc2e65a884b23d032e9bbbed0ae0c55abd3fcaf4452",
     "node": "docker.io/library/node:24.8.0-bookworm-slim@sha256:cadbfafeb6baf87eaaffa40b3640209c4b7fd38cebde65059d15bc39cd636b85",

@@ -329,16 +329,23 @@ function Build-Images {
     $metadata = Get-Content -Raw -LiteralPath (Join-Path $PSScriptRoot '..\images\versions.json') |
         ConvertFrom-Json
     $version = $metadata.templateVersion
-    $imageNames = @(
-        'standard', 'vscode', 'copilot',
-        'devsandbox-api', 'devsandbox-broker', 'devsandbox-operator', 'devsandbox-web',
-        'sandbox-router'
-    )
+    $imageNames = @('standard', 'vscode', 'copilot',
+        'devsandbox-api', 'devsandbox-broker', 'devsandbox-operator', 'devsandbox-web', 'sandbox-router')
+    $imageVersions = @{}
+    foreach ($imageName in $imageNames) {
+        $specificVersion = $metadata.templateVersions.PSObject.Properties[$imageName].Value
+        $imageVersions[$imageName] = if ([string]::IsNullOrWhiteSpace([string]$specificVersion)) {
+            $version
+        }
+        else {
+            [string]$specificVersion
+        }
+    }
     $published = @()
     foreach ($imageName in $imageNames) {
         try {
             $digest = (& az acr repository show --name $ContainerRegistryName `
-                --image "devsandbox/${imageName}:$version" --query digest `
+                --image "devsandbox/${imageName}:$($imageVersions[$imageName])" --query digest `
                 --output tsv --only-show-errors 2>$null) -join ''
             if ($LASTEXITCODE -eq 0 -and $digest -match '^sha256:[0-9a-f]{64}$') {
                 $published += $imageName
@@ -347,12 +354,11 @@ function Build-Images {
         catch {}
     }
     if ($published.Count -eq $imageNames.Count) {
-        Write-Host "Immutable image release $version is already published; skipping rebuild."
+        Write-Host 'All immutable image releases are already published; skipping rebuild.'
         return
     }
-    if ($published.Count -gt 0) {
-        throw "Image build Blocked: release $version is partially published; advance images/versions.json rather than overwrite immutable tags."
-    }
+    $missingImages = @($imageNames | Where-Object { $_ -notin $published })
+    Write-Host "Publishing missing immutable images: $($missingImages -join ', ')"
 
     $loginServer = & az acr show `
         --name $ContainerRegistryName `
@@ -372,7 +378,7 @@ function Build-Images {
             $dockerReady = $false
         }
     }
-    if ($dockerReady) {
+    if ($dockerReady -and $missingImages.Count -eq $imageNames.Count) {
         Invoke-Native az @('acr', 'login', '--name', $ContainerRegistryName, '--only-show-errors') -DiscardOutput
         & (Join-Path $PSScriptRoot 'build-images.ps1') `
             -Action Push `
@@ -384,7 +390,7 @@ function Build-Images {
         return
     }
 
-    Write-Host 'Local Docker is unavailable; publishing with ACR cloud builds.'
+    Write-Host 'Publishing missing images with ACR cloud builds.'
     $revision = (& git rev-parse HEAD).Trim()
     $buildDate = [DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ')
     $common = @(
@@ -399,19 +405,32 @@ function Build-Images {
         @{ Name = 'vscode'; Dockerfile = 'images\vscode\Dockerfile' },
         @{ Name = 'copilot'; Dockerfile = 'images\copilot\Dockerfile' }
     )) {
+        if ($image.Name -notin $missingImages) {
+            continue
+        }
+        $imageVersion = $imageVersions[$image.Name]
         Invoke-Native az ($common + @(
-            '--image', "devsandbox/$($image.Name):$version",
+            '--build-arg', "TEMPLATE_VERSION=$imageVersion",
+            '--image', "devsandbox/$($image.Name):$imageVersion",
             '--file', $image.Dockerfile, '.'
         ))
     }
     foreach ($binary in @('devsandbox-api', 'devsandbox-broker', 'devsandbox-operator', 'devsandbox-web')) {
+        if ($binary -notin $missingImages) {
+            continue
+        }
+        $imageVersion = $imageVersions[$binary]
         Invoke-Native az ($common + @(
-            '--build-arg', "BINARY=$binary", '--build-arg', "IMAGE_VERSION=$version",
-            '--image', "devsandbox/${binary}:$version",
+            '--build-arg', "BINARY=$binary", '--build-arg', "IMAGE_VERSION=$imageVersion",
+            '--image', "devsandbox/${binary}:$imageVersion",
             '--file', 'images\management\Dockerfile', '.'
         ))
     }
 
+    if ('sandbox-router' -notin $missingImages) {
+        return
+    }
+    $routerVersion = $imageVersions['sandbox-router']
     $routerSource = Join-Path $PSScriptRoot '..\artifacts\agent-sandbox-router-source'
     Remove-Item -LiteralPath $routerSource -Recurse -Force -ErrorAction SilentlyContinue
     try {
@@ -426,7 +445,7 @@ function Build-Images {
             '--build-arg', 'TARGETARCH=amd64',
             '--build-arg', "GIT_SHA=$($metadata.tools.sandboxRouter.sourceCommit)",
             '--build-arg', "BUILD_DATE=$buildDate",
-            '--image', "devsandbox/sandbox-router:$version",
+            '--image', "devsandbox/sandbox-router:$routerVersion",
             '--file', (Join-Path $routerSource 'Dockerfile'), '--only-show-errors', $routerSource
         )
     }
@@ -440,7 +459,13 @@ function Get-PublishedImageReference {
 
     $versions = Get-Content -Raw -LiteralPath (Join-Path $PSScriptRoot '..\images\versions.json') |
         ConvertFrom-Json
-    $version = $versions.templateVersion
+    $specificVersion = $versions.templateVersions.PSObject.Properties[$Name].Value
+    $version = if ([string]::IsNullOrWhiteSpace([string]$specificVersion)) {
+        [string]$versions.templateVersion
+    }
+    else {
+        [string]$specificVersion
+    }
     $imageRepository = "devsandbox/$Name"
     $digest = & az acr repository show `
         --name $ContainerRegistryName `

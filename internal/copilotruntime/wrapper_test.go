@@ -2,8 +2,6 @@ package copilotruntime
 
 import (
 	"context"
-	"errors"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -15,11 +13,10 @@ import (
 func TestPrepareInjectsCurrentTokenPerProcessWithoutPersistingIt(t *testing.T) {
 	var expectedToken string
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
-		expectedScheme := "Bearer"
 		if request.URL.Path != "/user" {
-			expectedScheme = "token"
+			t.Errorf("unexpected private endpoint probe: %s", request.URL.Path)
 		}
-		if got := request.Header.Get("Authorization"); got != expectedScheme+" "+expectedToken {
+		if got := request.Header.Get("Authorization"); got != "Bearer "+expectedToken {
 			t.Errorf("authorization header = %q", got)
 		}
 		writer.WriteHeader(http.StatusOK)
@@ -62,29 +59,28 @@ func TestPrepareInjectsCurrentTokenPerProcessWithoutPersistingIt(t *testing.T) {
 	}
 }
 
-func TestPrepareMapsEntitlementResponseWithoutIncludingBody(t *testing.T) {
-	const responseSecret = "response-must-not-appear"
+func TestPrepareDoesNotProbePrivateEntitlementEndpoint(t *testing.T) {
+	requests := 0
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
-		if request.URL.Path == "/user" {
-			writer.WriteHeader(http.StatusOK)
-			return
+		requests++
+		if request.URL.Path != "/user" {
+			t.Fatalf("unexpected request: %s", request.URL.Path)
 		}
-		writer.WriteHeader(http.StatusForbidden)
-		fmt.Fprint(writer, responseSecret)
+		writer.WriteHeader(http.StatusOK)
 	}))
 	defer server.Close()
 	tokenFile := filepath.Join(t.TempDir(), "github-token")
-	if err := os.WriteFile(tokenFile, []byte("without-entitlement"), 0o600); err != nil {
+	if err := os.WriteFile(tokenFile, []byte("supported-oauth-token"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
 	_, err := (Config{TokenFile: tokenFile, APIURL: server.URL, Client: server.Client()}).
 		Prepare(context.Background(), []string{"-p", "hello"}, nil)
-	if !errors.Is(err, ErrEntitlementRequired) {
-		t.Fatalf("error = %v", err)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if strings.Contains(err.Error(), responseSecret) {
-		t.Fatal("entitlement response body was exposed")
+	if requests != 1 {
+		t.Fatalf("requests = %d, want 1", requests)
 	}
 }
 
