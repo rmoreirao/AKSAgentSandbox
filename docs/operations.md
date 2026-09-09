@@ -1,5 +1,11 @@
 # DevSandbox PoC operations
 
+This runbook covers supported lifecycle operations, health, metrics, and audit
+investigation for the deployed PoC. Start with
+[Architecture](architecture.md) for component relationships,
+[Security](security.md) for trust boundaries and residual risks, and
+[Validation and deployment](validation.md) for deployment gates.
+
 ## Safe lifecycle operations
 
 The `DevSandbox` custom resource is the top-level owner and the only supported
@@ -32,6 +38,22 @@ Prometheus-compatible metrics are on `/metrics`. Alert on readiness failures,
 `reconciliation_failures_total`, `token_refresh_failures_total`, and
 `clone_failures_total`; use active sandbox/PVC/storage gauges for capacity.
 
+## Troubleshooting path
+
+Follow the dependency path rather than restarting healthy processes:
+
+| Layer | Check |
+| --- | --- |
+| Azure Front Door | API and web endpoint health, TLS, access logs, and origin probe results. |
+| AKS Gateway | Listener and route readiness, origin hostnames, and the exact `X-Azure-FDID` match. |
+| Management services | `/readyz`, pod events, service endpoints, workload identity, Key Vault, and Router dependencies. |
+| Operator | `DevSandbox` status and conditions, controller logs, quota, activity Lease, PVC, service account, and upstream Sandbox. |
+| Sandbox | Kata node placement, agent readiness, initialization output, Router reachability, broker identity, and workspace mount. |
+
+Use AKS Run Command for cluster inspection because the AKS API is private.
+Treat a failed dependency check as the incident signal; do not convert it into
+success by relying only on `/healthz`.
+
 ## Audit investigation
 
 Audit records are JSON `slog` entries with `msg == "audit"`. They contain only
@@ -40,3 +62,11 @@ They never include tokens, commands, stdout/stderr, or file content. Import or
 copy queries from [log-analytics.kql](log-analytics.kql), adjust the table name
 for the cluster's Container Insights configuration, and narrow by
 `sandbox_uid` or `user_id`.
+
+## Related documentation
+
+- [Architecture](architecture.md)
+- [Security](security.md)
+- [Development guide](development.md)
+- [Validation and deployment](validation.md)
+- [CLI reference](../README.md#use-the-devsandbox-cli)

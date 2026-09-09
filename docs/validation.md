@@ -1,5 +1,10 @@
 # MVP-15 validation and deployment
 
+This page is the authoritative validation and deployment checklist. See
+[Architecture](architecture.md) for the topology, [Security](security.md) for
+the control model and accepted risks, and [Operations](operations.md) for
+deployed troubleshooting.
+
 ## Local gates
 
 Use Go 1.27.0, Node.js 22, PowerShell 7, Azure CLI with Bicep, and kubectl with
@@ -16,6 +21,19 @@ pwsh ./scripts/build-images.ps1 -Action Validate
 npx --no-install playwright test --list
 pwsh ./scripts/security-validate.ps1 -Mode Static
 ```
+
+## Validation matrix
+
+| Level | Command or workflow | Purpose | Cloud required |
+| --- | --- | --- | --- |
+| Static | `scripts/validate.ps1 -Mode Static` | Go format/vet/tests, OpenAPI consistency, Bicep, Kustomize, pins, scripts, image metadata, security assertions, and Playwright discovery | No |
+| Build | `scripts/validate.ps1 -Mode Build` | All Go commands and container build/smoke when Docker is available | No |
+| Deployment preflight | `scripts/preflight.ps1 -Mode Deployment` | Tools, inputs, Azure identity, permissions, region, and quota | Yes |
+| Staged verification | `scripts/deploy.ps1 -Stage Verify` | Azure resources, private AKS, routing, identities, workloads, runtime class, and network controls | Yes |
+| Security | `scripts/security-validate.ps1` | Static or deployed assertions for isolation, RBAC, credentials, routing, and sensitive output | Deployed mode only |
+| Smoke | `scripts/smoke-kata.ps1` | Kata scheduling and basic isolated workload execution | Yes |
+| E2E | `scripts/e2e.ps1 -Scenario All` | User lifecycle, repositories, connectivity, templates, isolation, retention, and cleanup | Yes |
+| Audit | `scripts/audit-e2e.ps1` | Audit schema, required events, and sensitive-data exclusions | Yes |
 
 Only the `Static` and `Build` jobs are pull-request gates. Actions are pinned to
 full commit SHAs, Go comes from `go.mod`, and dependencies come from `npm ci`.
@@ -154,3 +172,11 @@ keyring.
 The Copilot wrapper validates the supported GitHub `/user` endpoint, injects the
 credential only into the Copilot process, and delegates entitlement handling to
 Copilot CLI. It does not call GitHub's private Copilot token endpoint.
+
+## Related documentation
+
+- [Architecture](architecture.md)
+- [Security](security.md)
+- [Development guide](development.md)
+- [Operations](operations.md)
+- [CLI reference](../README.md#use-the-devsandbox-cli)
