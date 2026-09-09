@@ -118,10 +118,11 @@ All Kubernetes apply, rollout, inspection, security, and cleanup operations use
 `az aks command invoke`; the AKS API remains private. Verify covers private AKS,
 system/Kata pools, the AKS RuntimeClass, a scheduled large profile, Front Door,
 the restricted Gateway origin, trusted endpoint TLS, workload identities,
-system placement, health, RBAC, and network segmentation. `e2e.ps1 -Scenario All` covers baseline API/template
-discovery, empty standard create/exec/list/status, stop/resume persistence,
-repository behavior, shell/exec/job/tunnel, idle, concurrent quota rejection,
-retention, VS Code/Playwright, Copilot, owner isolation, and cleanup.
+system placement, health, RBAC, and network segmentation. `e2e.ps1 -Scenario All` covers baseline API/template discovery, empty standard
+create/exec/list/status, stop/resume persistence, repository behavior,
+shell/exec/job/tunnel, idle, concurrent quota rejection, retention, VS
+Code/Playwright, the combined VS Code AI tool and authentication contract,
+Copilot, owner isolation, and cleanup.
 
 The workflow always invokes idempotent cleanup. `cleanup-e2e.ps1` prefers the
 owner API and falls back to AKS Run Command without printing authentication.
@@ -172,6 +173,11 @@ keyring.
 The Copilot wrapper validates the supported GitHub `/user` endpoint, injects the
 credential only into the Copilot process, and delegates entitlement handling to
 Copilot CLI. It does not call GitHub's private Copilot token endpoint.
+The OpenCode wrapper applies the same identity check and injects the credential
+through OpenCode's in-memory `OPENCODE_AUTH_CONTENT` contract. Its data home is
+the dedicated memory-backed runtime directory, not the workspace PVC.
+Repository-provided OpenCode configuration and plugins are disabled for this
+broker-authenticated execution path so they cannot inspect its auth environment.
 
 ## Related documentation
 

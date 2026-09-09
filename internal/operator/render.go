@@ -137,6 +137,20 @@ func RenderUpstreamSandbox(
 		map[string]interface{}{"name": "broker-identity", "mountPath": "/var/run/secrets/devsandbox/broker", "readOnly": true},
 		map[string]interface{}{"name": "broker-ca", "mountPath": "/etc/devsandbox/broker", "readOnly": true},
 	}
+	volumes := []interface{}{
+		map[string]interface{}{"name": "workspace", "persistentVolumeClaim": map[string]interface{}{"claimName": options.PVCName}},
+		map[string]interface{}{"name": "runtime", "emptyDir": map[string]interface{}{"medium": "Memory", "sizeLimit": "16Mi"}},
+		map[string]interface{}{"name": "dev-shm", "emptyDir": map[string]interface{}{"medium": "Memory", "sizeLimit": shm}},
+		map[string]interface{}{"name": "broker-identity", "projected": map[string]interface{}{
+			"defaultMode": int64(256),
+			"sources": []interface{}{map[string]interface{}{"serviceAccountToken": map[string]interface{}{
+				"audience": BrokerAudience, "expirationSeconds": int64(600), "path": "token",
+			}}},
+		}},
+		map[string]interface{}{"name": "broker-ca", "configMap": map[string]interface{}{
+			"name": "devsandbox-broker-ca",
+		}},
+	}
 	env := []interface{}{
 		map[string]interface{}{"name": "DEVSANDBOX_SERVICE_ACCOUNT_NAME", "value": options.ServiceAccount},
 		map[string]interface{}{"name": "DEVSANDBOX_SANDBOX_UID", "value": string(sandbox.UID)},
@@ -171,6 +185,18 @@ func RenderUpstreamSandbox(
 			map[string]interface{}{"name": "DEVSANDBOX_VSCODE_STATE_DIR", "value": "/workspace/.devsandbox/vscode"},
 		)
 	}
+	if template.Spec.Capabilities.OpenCode {
+		mounts = append(mounts, map[string]interface{}{
+			"name": "opencode-runtime", "mountPath": "/run/devsandbox-opencode",
+		})
+		volumes = append(volumes, map[string]interface{}{
+			"name":     "opencode-runtime",
+			"emptyDir": map[string]interface{}{"medium": "Memory", "sizeLimit": "256Mi"},
+		})
+		env = append(env, map[string]interface{}{
+			"name": "DEVSANDBOX_OPENCODE_RUNTIME_DIR", "value": "/run/devsandbox-opencode",
+		})
+	}
 	podSpec := map[string]interface{}{
 		"serviceAccountName":            options.ServiceAccount,
 		"automountServiceAccountToken":  false,
@@ -186,20 +212,7 @@ func RenderUpstreamSandbox(
 			"runAsNonRoot": true, "runAsUser": int64(1000), "runAsGroup": int64(1000), "fsGroup": int64(1000),
 			"seccompProfile": map[string]interface{}{"type": "RuntimeDefault"},
 		},
-		"volumes": []interface{}{
-			map[string]interface{}{"name": "workspace", "persistentVolumeClaim": map[string]interface{}{"claimName": options.PVCName}},
-			map[string]interface{}{"name": "runtime", "emptyDir": map[string]interface{}{"medium": "Memory", "sizeLimit": "16Mi"}},
-			map[string]interface{}{"name": "dev-shm", "emptyDir": map[string]interface{}{"medium": "Memory", "sizeLimit": shm}},
-			map[string]interface{}{"name": "broker-identity", "projected": map[string]interface{}{
-				"defaultMode": int64(256),
-				"sources": []interface{}{map[string]interface{}{"serviceAccountToken": map[string]interface{}{
-					"audience": BrokerAudience, "expirationSeconds": int64(600), "path": "token",
-				}}},
-			}},
-			map[string]interface{}{"name": "broker-ca", "configMap": map[string]interface{}{
-				"name": "devsandbox-broker-ca",
-			}},
-		},
+		"volumes": volumes,
 		"initContainers": []interface{}{map[string]interface{}{
 			"name": "devsandbox-init", "image": image,
 			"command":         []interface{}{"/usr/local/bin/devsandbox-init"},

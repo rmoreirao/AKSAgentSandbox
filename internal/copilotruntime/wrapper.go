@@ -2,6 +2,7 @@ package copilotruntime
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -15,14 +16,16 @@ import (
 )
 
 const (
-	DefaultTokenFile = "/run/devsandbox/github-token"
-	DefaultAPIURL    = "https://api.github.com"
+	DefaultTokenFile          = "/run/devsandbox/github-token"
+	DefaultOpenCodeRuntimeDir = "/run/devsandbox-opencode"
+	DefaultAPIURL             = "https://api.github.com"
 )
 
 type Config struct {
-	TokenFile string
-	APIURL    string
-	Client    *http.Client
+	TokenFile          string
+	OpenCodeRuntimeDir string
+	APIURL             string
+	Client             *http.Client
 }
 
 // Prepare obtains the current runtime credential for one Copilot process,
@@ -33,22 +36,12 @@ func (c Config) Prepare(ctx context.Context, args, environ []string) ([]string, 
 		return clean, nil
 	}
 
-	tokenFile := c.TokenFile
-	if tokenFile == "" {
-		tokenFile = DefaultTokenFile
-	}
-	raw, err := readRuntimeToken(tokenFile)
+	raw, tokenFile, err := c.validatedToken(ctx)
 	if err != nil {
-		return nil, errors.New("Copilot authentication unavailable: current runtime credential could not be read")
+		return nil, err
 	}
 	defer clear(raw)
 	token := strings.TrimSpace(string(raw))
-	if token == "" || strings.ContainsRune(token, '\x00') {
-		return nil, errors.New("Copilot authentication unavailable: current runtime credential is invalid")
-	}
-	if err := c.preflight(ctx, token); err != nil {
-		return nil, err
-	}
 
 	home := filepath.Join(filepath.Dir(tokenFile), "copilot")
 	if err := os.MkdirAll(home, 0o700); err != nil {
@@ -58,6 +51,79 @@ func (c Config) Prepare(ctx context.Context, args, environ []string) ([]string, 
 		"COPILOT_GITHUB_TOKEN="+token,
 		"COPILOT_HOME="+home,
 	), nil
+}
+
+// PrepareOpenCode injects the broker credential through OpenCode's documented
+// in-memory auth contract and keeps any runtime state off the workspace PVC.
+func (c Config) PrepareOpenCode(ctx context.Context, args, environ []string) ([]string, error) {
+	clean := withoutOpenCodeAuthentication(environ)
+	runtimeDir := c.OpenCodeRuntimeDir
+	if runtimeDir == "" {
+		runtimeDir = DefaultOpenCodeRuntimeDir
+	}
+	if !filepath.IsAbs(runtimeDir) {
+		return nil, errors.New("OpenCode authentication unavailable: runtime directory must be absolute")
+	}
+	paths := []string{"data", "cache", "config", "state", "tmp", "home"}
+	for _, name := range paths {
+		if err := os.MkdirAll(filepath.Join(runtimeDir, name), 0o700); err != nil {
+			return nil, errors.New("OpenCode authentication unavailable: runtime directory could not be created")
+		}
+	}
+	clean = append(clean,
+		"HOME="+filepath.Join(runtimeDir, "home"),
+		"XDG_DATA_HOME="+filepath.Join(runtimeDir, "data"),
+		"XDG_CACHE_HOME="+filepath.Join(runtimeDir, "cache"),
+		"XDG_CONFIG_HOME="+filepath.Join(runtimeDir, "config"),
+		"XDG_STATE_HOME="+filepath.Join(runtimeDir, "state"),
+		"TMPDIR="+filepath.Join(runtimeDir, "tmp"),
+		"OPENCODE_DISABLE_PROJECT_CONFIG=1",
+		"OPENCODE_DISABLE_AUTOUPDATE=1",
+	)
+	if informationalInvocation(args) {
+		return clean, nil
+	}
+
+	raw, _, err := c.validatedToken(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer clear(raw)
+	token := strings.TrimSpace(string(raw))
+	auth, err := json.Marshal(map[string]interface{}{
+		"github-copilot": map[string]interface{}{
+			"type": "oauth", "refresh": token, "access": token, "expires": 0,
+		},
+	})
+	if err != nil {
+		return nil, errors.New("OpenCode authentication unavailable: runtime configuration could not be created")
+	}
+	defer clear(auth)
+
+	return append(clean,
+		"OPENCODE_AUTH_CONTENT="+string(auth),
+	), nil
+}
+
+func (c Config) validatedToken(ctx context.Context) ([]byte, string, error) {
+	tokenFile := c.TokenFile
+	if tokenFile == "" {
+		tokenFile = DefaultTokenFile
+	}
+	raw, err := readRuntimeToken(tokenFile)
+	if err != nil {
+		return nil, "", errors.New("Copilot authentication unavailable: current runtime credential could not be read")
+	}
+	token := strings.TrimSpace(string(raw))
+	if token == "" || strings.ContainsRune(token, '\x00') {
+		clear(raw)
+		return nil, "", errors.New("Copilot authentication unavailable: current runtime credential is invalid")
+	}
+	if err := c.preflight(ctx, token); err != nil {
+		clear(raw)
+		return nil, "", err
+	}
+	return raw, tokenFile, nil
 }
 
 func (c Config) preflight(ctx context.Context, token string) error {
@@ -130,11 +196,29 @@ func withoutAuthentication(environ []string) []string {
 	for _, value := range environ {
 		name, _, _ := strings.Cut(value, "=")
 		switch strings.ToUpper(name) {
-		case "COPILOT_GITHUB_TOKEN", "GH_TOKEN", "GITHUB_TOKEN", "COPILOT_HOME":
+		case "COPILOT_GITHUB_TOKEN", "GH_TOKEN", "GITHUB_TOKEN", "COPILOT_HOME", "OPENCODE_AUTH_CONTENT":
 			continue
 		default:
 			result = append(result, value)
 		}
+	}
+	return result
+}
+
+func withoutOpenCodeAuthentication(environ []string) []string {
+	clean := withoutAuthentication(environ)
+	result := make([]string, 0, len(clean))
+	for _, value := range clean {
+		name, _, _ := strings.Cut(value, "=")
+		upper := strings.ToUpper(name)
+		switch upper {
+		case "HOME", "XDG_DATA_HOME", "XDG_CACHE_HOME", "XDG_CONFIG_HOME", "XDG_STATE_HOME", "TMPDIR":
+			continue
+		}
+		if strings.HasPrefix(upper, "OPENCODE_") {
+			continue
+		}
+		result = append(result, value)
 	}
 	return result
 }

@@ -320,7 +320,7 @@ func TestTemplateShowJSONHasStableFields(t *testing.T) {
 		writeResponse(writer, http.StatusOK, Template{
 			Name: "standard", DisplayName: "Standard", Description: "Shell",
 			Version: "1.2.3", ImageDigest: "sha256:abc", DefaultProfile: "small",
-			EntryAction: "shell", Capabilities: TemplateCapabilities{},
+			EntryAction: "shell", Capabilities: TemplateCapabilities{OpenCode: true},
 		})
 	}))
 	defer server.Close()
@@ -338,6 +338,13 @@ func TestTemplateShowJSONHasStableFields(t *testing.T) {
 		if _, ok := value[field]; !ok {
 			t.Errorf("stable field %q missing from %s", field, out.String())
 		}
+	}
+	var capabilities map[string]bool
+	if err := json.Unmarshal(value["capabilities"], &capabilities); err != nil {
+		t.Fatal(err)
+	}
+	if !capabilities["opencode"] {
+		t.Fatalf("OpenCode capability missing from %s", out.String())
 	}
 }
 

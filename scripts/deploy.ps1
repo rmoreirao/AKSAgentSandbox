@@ -329,7 +329,7 @@ function Build-Images {
     $metadata = Get-Content -Raw -LiteralPath (Join-Path $PSScriptRoot '..\images\versions.json') |
         ConvertFrom-Json
     $version = $metadata.templateVersion
-    $imageNames = @('standard', 'vscode', 'copilot',
+    $imageNames = @('standard', 'vscode', 'vscode-ai', 'copilot',
         'devsandbox-api', 'devsandbox-broker', 'devsandbox-operator', 'devsandbox-web', 'sandbox-router')
     $imageVersions = @{}
     foreach ($imageName in $imageNames) {
@@ -403,6 +403,7 @@ function Build-Images {
     foreach ($image in @(
         @{ Name = 'standard'; Dockerfile = 'images\standard\Dockerfile' },
         @{ Name = 'vscode'; Dockerfile = 'images\vscode\Dockerfile' },
+        @{ Name = 'vscode-ai'; Dockerfile = 'images\vscode-ai\Dockerfile' },
         @{ Name = 'copilot'; Dockerfile = 'images\copilot\Dockerfile' }
     )) {
         if ($image.Name -notin $missingImages) {
@@ -595,6 +596,7 @@ function Deploy-KubernetesResources {
     $templateImages = @{
         standard = Get-PublishedImageReference -Name standard
         vscode = Get-PublishedImageReference -Name vscode
+        'vscode-ai' = Get-PublishedImageReference -Name vscode-ai
         copilot = Get-PublishedImageReference -Name copilot
     }
     $rendered = & kubectl kustomize '.\deploy\kustomize\overlays\poc'
@@ -639,12 +641,13 @@ function Deploy-KubernetesResources {
         $placeholder = switch ($templateName) {
             standard { 'sha256:' + ('a' * 64) }
             vscode { 'sha256:' + ('b' * 64) }
+            'vscode-ai' { 'sha256:' + ('d' * 64) }
             copilot { 'sha256:' + ('c' * 64) }
         }
         $manifest = $manifest.Replace("example.invalid/devsandbox/$templateName", $parts[0])
         $manifest = $manifest.Replace($placeholder, $parts[1])
     }
-    if ($manifest -match 'example\.invalid/devsandbox|sha256:[abc]{64}|replace-at-deploy|REPLACE_WITH_') {
+    if ($manifest -match 'example\.invalid/devsandbox|sha256:[a-d]{64}|replace-at-deploy|REPLACE_WITH_') {
         throw 'Kubernetes stage Blocked: a deploy-time placeholder remains after replacement.'
     }
 

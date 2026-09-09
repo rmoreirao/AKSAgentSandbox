@@ -153,7 +153,13 @@ empty workspace:
 devsandbox up
 devsandbox up --repo OWNER/REPOSITORY --template standard
 devsandbox up --empty --template copilot --name investigation
+devsandbox up --repo OWNER/REPOSITORY --template vscode-ai
 ```
+
+The `vscode-ai` template opens browser-based VS Code and provides authenticated
+`gh`, `copilot`, and `opencode` commands in the integrated terminal. Copilot and
+OpenCode receive the current broker credential only in their process
+environments; no provider credential is stored on the workspace.
 
 Connect and run work:
 

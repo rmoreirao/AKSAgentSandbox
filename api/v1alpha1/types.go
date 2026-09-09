@@ -62,8 +62,10 @@ type ServicePort struct {
 }
 
 type TemplateCapabilities struct {
-	VSCode     bool `json:"vscode"`
-	Copilot    bool `json:"copilot"`
+	VSCode  bool `json:"vscode"`
+	Copilot bool `json:"copilot"`
+	// +kubebuilder:default=false
+	OpenCode   bool `json:"opencode"`
 	Playwright bool `json:"playwright"`
 }
 

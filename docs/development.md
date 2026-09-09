@@ -30,7 +30,7 @@ requirements, use [DEVSANDBOX_SPEC.md](../DEVSANDBOX_SPEC.md).
 | `infra/` | Subscription and resource-group Bicep deployments. |
 | `deploy/kustomize/` | AKS namespaces, workloads, RBAC, policies, templates, and PoC overlay. |
 | `deploy/runtime/` | Operator-rendered sandbox runtime fragment. |
-| `images/` | Curated standard, VS Code, Copilot, and management images. |
+| `images/` | Curated standard, VS Code, VS Code AI, Copilot, and management images. |
 | `scripts/` | Validation, image, deployment, smoke, E2E, audit, and cleanup automation. |
 | `tests/ui/` | Browser-based VS Code smoke coverage. |
 | `docs/` | Architecture, security, operations, validation, and contributor guides. |
@@ -47,6 +47,7 @@ requirements, use [DEVSANDBOX_SPEC.md](../DEVSANDBOX_SPEC.md).
 | `devsandbox-init` | Initializes or resumes the persistent workspace. |
 | `devsandbox-agent` | Runs the authenticated process supervisor inside a sandbox. |
 | `devsandbox-copilot` | Starts Copilot CLI with the supported runtime credential handling. |
+| `devsandbox-opencode` | Starts OpenCode with process-only GitHub Copilot authentication. |
 
 Sandbox Router is built from the Agent Sandbox version and source commit pinned
 under `deploy/kustomize/base/upstream/agent-sandbox/`.
@@ -133,4 +134,3 @@ new version rather than overwriting an existing release.
 - [Security](security.md)
 - [Operations](operations.md)
 - [Validation and deployment](validation.md)
-

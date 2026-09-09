@@ -5,6 +5,7 @@
   "templateVersions": {
     "standard": "0.1.0",
     "vscode": "0.1.0",
+    "vscode-ai": "0.1.0",
     "copilot": "0.1.1"
   },
   "baseImages": {
@@ -36,6 +37,14 @@
       "sha256": {
         "linux-amd64": "37fa67686a9e4ed8d46dcd6a9c80ab524dea840ecaa0a3f7edf8d09f961b97a9",
         "linux-arm64": "86c4c77a91b1ff5dd7313cbea9f861699a2cdceb4696f3864f3f0584e9684e0f"
+      }
+    },
+    "openCode": {
+      "version": "1.18.30",
+      "releaseCommit": "5cd8e68fdd72b27818d26d168b9c7a06b359567e",
+      "sha256": {
+        "linux-amd64": "55007246858165496ff85ba1c2b648f7421e8e2013bf4189a680c9ff8e699d17",
+        "linux-arm64": "4111a55c2a02c0fac314bd51e9a2330280e6d29d2b85b9554fff6d62612566ed"
       }
     },
     "playwrightCli": {

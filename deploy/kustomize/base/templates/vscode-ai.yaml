@@ -1,17 +1,17 @@
 apiVersion: devsandbox.io/v1alpha1
 kind: DevSandboxTemplate
 metadata:
-  name: vscode
+  name: vscode-ai
   labels:
     app.kubernetes.io/managed-by: devsandbox
     devsandbox.io/template-version: 0.1.0
 spec:
-  displayName: VS Code
-  description: Standard DevSandbox environment with code-server and persistent editor state.
+  displayName: VS Code AI
+  description: Browser-based VS Code with GitHub Copilot CLI and OpenCode.
   version: 0.1.0
   image:
-    repository: example.invalid/devsandbox/vscode
-    digest: sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+    repository: example.invalid/devsandbox/vscode-ai
+    digest: sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd
   defaultProfile: medium
   entryAction: vscode
   servicePorts:
@@ -21,6 +21,6 @@ spec:
   sandboxBlueprint: {}
   capabilities:
     vscode: true
-    copilot: false
-    opencode: false
+    copilot: true
+    opencode: true
     playwright: false

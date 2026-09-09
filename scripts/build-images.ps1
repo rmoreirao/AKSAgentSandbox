@@ -41,6 +41,7 @@ function Assert-StaticInputs {
     foreach ($path in @(
         'images\standard\Dockerfile',
         'images\vscode\Dockerfile',
+        'images\vscode-ai\Dockerfile',
         'images\copilot\Dockerfile',
         'images\management\Dockerfile',
         'deploy\router\Dockerfile'
@@ -66,6 +67,7 @@ function Assert-StaticInputs {
         $metadata.tools.codeServer.version,
         $metadata.tools.githubCli.version,
         $metadata.tools.copilotCli.version,
+        $metadata.tools.openCode.version,
         $metadata.tools.playwrightCli.version,
         $metadata.tools.playwrightCli.playwrightVersion,
         $metadata.tools.playwrightCli.sha256,
@@ -77,7 +79,12 @@ function Assert-StaticInputs {
             throw "Version metadata pin is not present in a Dockerfile: $pin"
         }
     }
-    foreach ($path in @('images\standard\Dockerfile', 'images\vscode\Dockerfile', 'images\copilot\Dockerfile')) {
+    foreach ($path in @(
+        'images\standard\Dockerfile',
+        'images\vscode\Dockerfile',
+        'images\vscode-ai\Dockerfile',
+        'images\copilot\Dockerfile'
+    )) {
         $text = Get-Content -Raw -LiteralPath (Join-Path $root $path)
         if (-not $text.Contains('USER 1000:1000') -or
             $text -notmatch 'DEVSANDBOX_GITHUB_TOKEN_FILE=/run/devsandbox/github-token') {
@@ -86,12 +93,12 @@ function Assert-StaticInputs {
     }
     $templates = Get-ChildItem (Join-Path $root 'deploy\kustomize\base\templates') -Filter '*.yaml' |
         Where-Object Name -ne 'kustomization.yaml'
-    if ($templates.Count -ne 3) {
-        throw 'Exactly three DevSandboxTemplate manifests are required.'
+    if ($templates.Count -ne 4) {
+        throw 'Exactly four DevSandboxTemplate manifests are required.'
     }
     foreach ($template in $templates) {
         $text = Get-Content -Raw -LiteralPath $template.FullName
-        if ($text -notmatch 'digest:\s+sha256:[abc]{64}' -or $text -match 'volumeClaimTemplates') {
+        if ($text -notmatch 'digest:\s+sha256:[a-d]{64}' -or $text -match 'volumeClaimTemplates') {
             throw "$($template.Name) must retain a deploy-time digest placeholder and no volumeClaimTemplates."
         }
     }
@@ -173,6 +180,10 @@ function Test-Images([hashtable]$tags) {
     $checks = @(
         @{ Image = $tags.standard; Arguments = @('git', '--version'); Expected = '^git version ' },
         @{ Image = $tags.vscode; Arguments = @('code-server', '--version'); Expected = "(?m)^$([regex]::Escape($metadata.tools.codeServer.version))" },
+        @{ Image = $tags['vscode-ai']; Arguments = @('code-server', '--version'); Expected = "(?m)^$([regex]::Escape($metadata.tools.codeServer.version))" },
+        @{ Image = $tags['vscode-ai']; Arguments = @('gh', '--version'); Expected = "gh version $([regex]::Escape($metadata.tools.githubCli.version))" },
+        @{ Image = $tags['vscode-ai']; Arguments = @('copilot', '--version'); Expected = [regex]::Escape($metadata.tools.copilotCli.version) },
+        @{ Image = $tags['vscode-ai']; Arguments = @('opencode', '--version'); Expected = [regex]::Escape($metadata.tools.openCode.version) },
         @{ Image = $tags.copilot; Arguments = @('gh', '--version'); Expected = "gh version $([regex]::Escape($metadata.tools.githubCli.version))" },
         @{ Image = $tags.copilot; Arguments = @('copilot', '--version'); Expected = [regex]::Escape($metadata.tools.copilotCli.version) },
         @{ Image = $tags.copilot; Arguments = @('playwright-cli', '--help'); Expected = 'playwright-cli' }
@@ -189,7 +200,7 @@ function Test-Images([hashtable]$tags) {
     if ($LASTEXITCODE -ne 0 -or $browserVersion -ne $metadata.tools.playwrightCli.chromiumVersion) {
         throw "Chromium version check failed: $browserVersion"
     }
-    foreach ($name in @('standard', 'vscode', 'copilot')) {
+    foreach ($name in @('standard', 'vscode', 'vscode-ai', 'copilot')) {
         $uid = (& docker run --rm $tags[$name] id -u).Trim()
         if ($LASTEXITCODE -ne 0 -or $uid -ne '1000') {
             throw "$name image does not start as UID 1000."
@@ -216,6 +227,7 @@ try {
     $tags = @{}
     $tags.standard = Build-Image 'standard' 'images\standard\Dockerfile'
     $tags.vscode = Build-Image 'vscode' 'images\vscode\Dockerfile'
+    $tags['vscode-ai'] = Build-Image 'vscode-ai' 'images\vscode-ai\Dockerfile'
     $tags.copilot = Build-Image 'copilot' 'images\copilot\Dockerfile'
     foreach ($binary in @('devsandbox-api', 'devsandbox-broker', 'devsandbox-operator', 'devsandbox-web')) {
         $tags[$binary] = Build-Image $binary 'images\management\Dockerfile' @(
@@ -231,6 +243,7 @@ try {
         versions = [ordered]@{
             standard = (Get-ImageVersion 'standard')
             vscode = (Get-ImageVersion 'vscode')
+            'vscode-ai' = (Get-ImageVersion 'vscode-ai')
             copilot = (Get-ImageVersion 'copilot')
         }
         revision = $revision

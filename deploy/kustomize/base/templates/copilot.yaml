@@ -19,4 +19,5 @@ spec:
   capabilities:
     vscode: false
     copilot: true
+    opencode: false
     playwright: true

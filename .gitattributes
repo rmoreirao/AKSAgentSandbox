@@ -1,0 +1,2 @@
+*.sh text eol=lf
+images/common/* text eol=lf

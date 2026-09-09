@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [ValidateSet('All', 'Baseline', 'RepositoryClone', 'Connectivity', 'ManagedJobIdle', 'Quota', 'Retention', 'VSCode', 'CopilotTemplate')]
+    [ValidateSet('All', 'Baseline', 'RepositoryClone', 'Connectivity', 'ManagedJobIdle', 'Quota', 'Retention', 'VSCode', 'VSCodeAI', 'CopilotTemplate')]
     [string]$Scenario = 'All'
 )
 
@@ -13,7 +13,7 @@ $required = @('DEVSANDBOX_API_HOSTNAME', 'DEVSANDBOX_TEST_USER_SESSION')
 if ($Scenario -in @('All', 'RepositoryClone')) {
     $required += @('DEVSANDBOX_TEST_ORG', 'DEVSANDBOX_TEST_PRIVATE_REPO', 'DEVSANDBOX_TEST_PUBLIC_REPO')
 }
-elseif ($Scenario -eq 'VSCode') {
+elseif ($Scenario -in @('VSCode', 'VSCodeAI')) {
     $required += 'DEVSANDBOX_TEST_PUBLIC_REPO'
 }
 $missing = @($required | Where-Object { [string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($_)) })
@@ -108,8 +108,10 @@ try {
         'standard' -notin @($templates.items.name)) { throw 'standard template is unavailable' }
     if ($Scenario -in @('All', 'CopilotTemplate') -and
         'copilot' -notin @($templates.items.name)) { throw 'copilot template is unavailable' }
-    if ($Scenario -in @('All', 'VSCode')) {
+    if ($Scenario -in @('All', 'VSCode', 'VSCodeAI')) {
         if ('vscode' -notin @($templates.items.name)) { throw 'vscode template is unavailable' }
+        if ($Scenario -in @('All', 'VSCodeAI') -and
+            'vscode-ai' -notin @($templates.items.name)) { throw 'vscode-ai template is unavailable' }
         if (-not (Get-Command npx -ErrorAction SilentlyContinue)) { throw 'npx is unavailable' }
         if (-not (Get-Command node -ErrorAction SilentlyContinue)) { throw 'node is unavailable' }
         if (-not (Test-Path (Join-Path $PSScriptRoot '..\playwright.config.ts'))) { throw 'Playwright configuration is unavailable' }
@@ -567,12 +569,57 @@ function Invoke-ManagedJobIdleScenario {
 }
 
 function Invoke-VSCodeScenario {
+    param(
+        [string]$Template = 'vscode',
+        [string]$Suffix = 'vscode'
+    )
     $sandbox = $null
     $previousURL = [Environment]::GetEnvironmentVariable('DEVSANDBOX_VSCODE_URL', 'Process')
     $previousRepository = [Environment]::GetEnvironmentVariable('DEVSANDBOX_VSCODE_REPOSITORY', 'Process')
     $previousHTMLReport = [Environment]::GetEnvironmentVariable('PLAYWRIGHT_HTML_OPEN', 'Process')
     try {
-        $sandbox = New-RepositorySandbox $env:DEVSANDBOX_TEST_PUBLIC_REPO 'vscode' 'vscode' 'medium'
+        $sandbox = New-RepositorySandbox $env:DEVSANDBOX_TEST_PUBLIC_REPO $Suffix $Template 'medium'
+        if ($Template -eq 'vscode-ai') {
+            $metadata = Get-Content -Raw -LiteralPath (Join-Path $PSScriptRoot '..\images\versions.json') |
+                ConvertFrom-Json
+            $copilotVersion = Invoke-SandboxExec $sandbox.Name copilot @('--version')
+            if ($copilotVersion -notmatch [regex]::Escape($metadata.tools.copilotCli.version)) {
+                throw 'VS Code AI Copilot CLI does not match images/versions.json'
+            }
+            $copilotAuth = Invoke-SandboxExec $sandbox.Name copilot @(
+                '-p', 'Reply with exactly: DEVSANDBOX_VSCODE_AI_COPILOT_AUTH_OK'
+            )
+            if ($copilotAuth -notmatch 'DEVSANDBOX_VSCODE_AI_COPILOT_AUTH_OK' -or
+                $copilotAuth -match 'github\.com/login/device|one-time code') {
+                throw 'VS Code AI Copilot CLI did not authenticate noninteractively'
+            }
+            $openCodeVersion = Invoke-SandboxExec $sandbox.Name opencode @('--version')
+            if ($openCodeVersion -notmatch [regex]::Escape($metadata.tools.openCode.version)) {
+                throw 'VS Code AI OpenCode does not match images/versions.json'
+            }
+            $models = Invoke-SandboxExec $sandbox.Name opencode @('models', 'github-copilot')
+            $model = @($models -split "`r?`n" | Where-Object { $_ -match '^github-copilot/\S+$' }) |
+                Select-Object -First 1
+            if ([string]::IsNullOrWhiteSpace($model)) {
+                throw 'VS Code AI OpenCode could not discover an authenticated GitHub Copilot model'
+            }
+            $openCodeAuth = Invoke-SandboxExec $sandbox.Name opencode @(
+                'run', '--model', $model, '--format', 'json',
+                'Reply with exactly: DEVSANDBOX_OPENCODE_AUTH_OK'
+            )
+            if ($openCodeAuth -notmatch 'DEVSANDBOX_OPENCODE_AUTH_OK' -or
+                $openCodeAuth -match 'github\.com/login/device|one-time code') {
+                throw 'VS Code AI OpenCode did not authenticate noninteractively'
+            }
+            $runtimeType = Invoke-SandboxExec $sandbox.Name stat @(
+                '-f', '-c', '%T', '/run/devsandbox-opencode'
+            )
+            if ($runtimeType -ne 'tmpfs') { throw 'VS Code AI OpenCode runtime is not memory-backed' }
+            Invoke-SandboxExec $sandbox.Name sh @(
+                '-c',
+                "if grep -IRIlE 'gh[uops]_[A-Za-z0-9_]+|github_pat_[A-Za-z0-9_]+' /workspace 2>/dev/null | grep -q .; then exit 9; fi"
+            ) | Out-Null
+        }
         $issued = Invoke-API Post "/v1/sandboxes/$($sandbox.Name)/vscode-url" @{}
         if ([string]::IsNullOrWhiteSpace($issued.url)) { throw 'VS Code URL issuance returned no URL' }
         try { $parsed = [Uri]$issued.url }
@@ -593,6 +640,16 @@ function Invoke-VSCodeScenario {
             Write-Output $sanitized
         }
         if ($testExitCode -ne 0) { throw "Playwright VS Code smoke test failed with exit code $testExitCode" }
+        if ($Template -eq 'vscode-ai') {
+            Invoke-API Post "/v1/sandboxes/$($sandbox.Name)/stop" $null | Out-Null
+            Wait-Sandbox $sandbox.Name @('Stopped') 300 | Out-Null
+            Invoke-API Post "/v1/sandboxes/$($sandbox.Name)/resume" $null | Out-Null
+            Wait-Sandbox $sandbox.Name @('Running') 600 | Out-Null
+            Invoke-SandboxExec $sandbox.Name sh @(
+                '-c',
+                "if grep -IRIlE 'gh[uops]_[A-Za-z0-9_]+|github_pat_[A-Za-z0-9_]+' /workspace 2>/dev/null | grep -q .; then exit 9; fi"
+            ) | Out-Null
+        }
     }
     finally {
         [Environment]::SetEnvironmentVariable('DEVSANDBOX_VSCODE_URL', $previousURL, 'Process')
@@ -602,7 +659,7 @@ function Invoke-VSCodeScenario {
             try { Invoke-API Delete "/v1/sandboxes/$($sandbox.Name)" $null | Out-Null } catch {}
         }
     }
-    Write-Output 'Passed: VSCode'
+    Write-Output "Passed: $Template browser and tool contract"
 }
 
 try {
@@ -623,6 +680,9 @@ try {
     }
     if ($Scenario -in @('All', 'VSCode')) {
         Invoke-VSCodeScenario
+    }
+    if ($Scenario -in @('All', 'VSCodeAI')) {
+        Invoke-VSCodeScenario -Template 'vscode-ai' -Suffix 'vscode-ai'
     }
     if ($Scenario -in @('All', 'CopilotTemplate')) {
         . (Join-Path $PSScriptRoot 'e2e-copilot.ps1')

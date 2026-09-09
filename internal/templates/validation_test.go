@@ -76,3 +76,17 @@ func TestVSCodeTemplateRequiresStartupContract(t *testing.T) {
 		t.Fatalf("valid VS Code contract rejected: %v", err)
 	}
 }
+
+func TestVSCodeAITemplateSupportsCombinedCapabilities(t *testing.T) {
+	template := validTemplate()
+	template.Spec.EntryAction = devsandboxv1alpha1.EntryActionVSCode
+	template.Spec.ServicePorts = []devsandboxv1alpha1.ServicePort{{
+		Name: "code-server", Port: 13337, Protocol: corev1.ProtocolTCP,
+	}}
+	template.Spec.Capabilities = devsandboxv1alpha1.TemplateCapabilities{
+		VSCode: true, Copilot: true, OpenCode: true,
+	}
+	if err := Validate(template); err != nil {
+		t.Fatalf("valid VS Code AI contract rejected: %v", err)
+	}
+}

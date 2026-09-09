@@ -33,7 +33,7 @@ The MVP must:
 
 1. Provide a `devsandbox` CLI for creating and managing developer sandboxes.
 2. Run sandbox workloads in an isolated AKS cluster using Kata.
-3. Support standard, VS Code, and Copilot templates.
+3. Support standard, VS Code, VS Code AI, and Copilot templates.
 4. Automatically clone a supported GitHub repository at an exact commit.
 5. Make Git and GitHub credentials available without copying local SSH keys,
    GitHub CLI configuration, or local PATs.
@@ -181,7 +181,7 @@ devsandbox up
 devsandbox up --repo OWNER/REPOSITORY
 devsandbox up --repo https://github.com/OWNER/REPOSITORY.git
 devsandbox up --empty
-devsandbox up --template standard|vscode|copilot
+devsandbox up --template standard|vscode|vscode-ai|copilot
 devsandbox up --profile small|medium|large
 devsandbox up --name NAME
 devsandbox up --ref BRANCH_OR_SHA
@@ -378,6 +378,9 @@ Credential rules:
 - The `gh` wrapper reads the current token for each invocation.
 - The Copilot template launches `copilot` with
   `COPILOT_GITHUB_TOKEN` populated at process start.
+- The VS Code AI template launches Copilot and OpenCode from the integrated
+  terminal with process-only authentication populated from the same
+  memory-backed credential.
 - A Copilot process that outlives its token may require restart in the MVP.
 
 The accepted MVP model injects the raw user token into the sandbox runtime.
@@ -425,6 +428,21 @@ the same digest.
 - Mounts an appropriately sized memory-backed `/dev/shm`.
 - Uses the centrally refreshed GitHub user token for GitHub and Copilot
   authentication.
+
+#### VS Code AI template
+
+- Default profile: medium.
+- Includes browser-based code-server, GitHub CLI, GitHub Copilot CLI, and
+  OpenCode.
+- Opens VS Code by default; both AI CLIs are available from its integrated
+  terminal.
+- Injects the current broker credential into Copilot and OpenCode only for the
+  lifetime of each process.
+- Places all OpenCode XDG, cache, state, and temporary data under a dedicated
+  memory-backed `/run/devsandbox-opencode` volume, never the workspace PVC.
+- Disables repository-provided OpenCode configuration and plugins for the
+  broker-authenticated execution path.
+- Does not include Playwright or preinstall editor extensions.
 
 Template images must be built in ACR, referenced by digest, and include version
 labels. Installation mechanisms and upstream versions must be pinned during
@@ -1218,7 +1236,7 @@ router tag. The deployment must create:
   ingress, web-to-internal-API exchange, and broker-only workload access to the
   management namespace;
 - Standard SSD StorageClass if a suitable built-in class is not used;
-- three immutable DevSandboxTemplate resources.
+- four immutable DevSandboxTemplate resources.
 - one zero-RBAC ServiceAccount per DevSandbox, created and removed by the
   operator.
 
@@ -1941,6 +1959,29 @@ Completion criteria:
 - A logged-in platform user can start the Copilot template without a second
   Copilot login.
 
+### MVP-13a: Implement VS Code AI template experience
+
+Dependencies: MVP-12, MVP-13.
+
+Deliverables:
+
+- Browser-based VS Code with `gh`, `copilot`, and `opencode` in the integrated
+  terminal.
+- Pinned multi-architecture OpenCode installation.
+- Process-only OpenCode authentication through `OPENCODE_AUTH_CONTENT`.
+- OpenCode runtime data on memory-backed storage.
+
+Automated checks:
+
+```powershell
+pwsh ./scripts/e2e.ps1 -Scenario VSCodeAI
+```
+
+The scenario verifies the browser contract, pinned CLI versions,
+noninteractive Copilot and OpenCode authentication, memory-backed runtime
+storage, and absence of credentials from the workspace before and after
+stop/resume.
+
 ### MVP-14: Add observability and operational behavior
 
 Dependencies: MVP-04, MVP-08.
@@ -2291,8 +2332,10 @@ PoC:
     origin.
 17. The Copilot template starts authenticated and launches Chromium through
     Playwright CLI.
-18. Tokens are absent from CRDs, Pod specs, logs, images, and workspace storage.
-19. CI, Bicep, build, cloud smoke, lifecycle, and UI checks report success.
+18. The VS Code AI template opens the browser editor with authenticated Copilot
+    CLI and OpenCode available in its terminal.
+19. Tokens are absent from CRDs, Pod specs, logs, images, and workspace storage.
+20. CI, Bicep, build, cloud smoke, lifecycle, and UI checks report success.
 
 ## 16. Known Risks and Production Blockers
 

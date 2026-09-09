@@ -85,7 +85,7 @@ Run Command rather than direct public access to the Kubernetes API.
 
 | Component | Responsibility |
 | --- | --- |
-| DevSandbox CLI | Resolves configuration and repository state, calls the management API, waits for lifecycle transitions, and provides shell, exec, job, port, VS Code, and Copilot entry points. |
+| DevSandbox CLI | Resolves configuration and repository state, calls the management API, waits for lifecycle transitions, and provides shell, exec, job, port, VS Code, and Copilot entry points. The VS Code AI template exposes Copilot CLI and OpenCode inside the browser editor terminal. |
 | Management API | Authenticates users, enforces owner authorization, exposes the public API, manages `DevSandbox` resources, renews activity, and issues signed connectivity claims. |
 | Web gateway | Exchanges one-time browser credentials and proxies authenticated VS Code browser traffic through Sandbox Router. |
 | DevSandbox operator | Reconciles templates, quotas, PVCs, per-sandbox service accounts, activity leases, and upstream Agent Sandbox resources. |

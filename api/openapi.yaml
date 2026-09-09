@@ -488,11 +488,13 @@ components:
     Capabilities:
       type: object
       additionalProperties: false
-      required: [vscode, copilot, playwright]
+      required: [vscode, copilot, opencode, playwright]
       properties:
         vscode:
           type: boolean
         copilot:
+          type: boolean
+        opencode:
           type: boolean
         playwright:
           type: boolean

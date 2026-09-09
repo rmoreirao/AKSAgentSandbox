@@ -129,6 +129,7 @@ entry point.
 | GitHub App refresh material | Stored and rotated through private Key Vault access using the API managed identity. |
 | Sandbox broker identity | Ten-minute projected Kubernetes token with a dedicated audience, mounted read-only. |
 | Sandbox GitHub credential | Returned only after broker binding validation and written to the memory-backed runtime directory, not the persistent workspace. |
+| Copilot and OpenCode process authentication | Wrapper processes validate the current sandbox GitHub credential and inject it only into the child process. OpenCode disables repository-provided configuration and plugins, uses `OPENCODE_AUTH_CONTENT`, and redirects all XDG and temporary paths to a dedicated memory-backed runtime volume; neither tool writes authentication to the workspace PVC. |
 | Browser entry credential | One-time exchange material; the browser receives it in the URL fragment rather than query parameters or workflow output. |
 
 Secret values must not appear in preflight output, workflow outputs, generated
@@ -193,4 +194,3 @@ secret-free.
 - [Operations](operations.md)
 - [Validation and deployment](validation.md)
 - [Detailed security validation](../DEVSANDBOX_SPEC.md#145-security-validation)
-

@@ -39,6 +39,33 @@ func TestVSCodeTemplateRendersSupervisedInternalService(t *testing.T) {
 	assertVSCodeEnvironment(t, environment, "DEVSANDBOX_VSCODE_STATE_DIR", "/workspace/.devsandbox/vscode")
 }
 
+func TestVSCodeAITemplateRendersDedicatedOpenCodeRuntime(t *testing.T) {
+	now := time.Date(2026, 9, 2, 12, 0, 0, 0, time.UTC)
+	sandbox, template := testObjects(now)
+	template.Spec.EntryAction = devsandboxv1alpha1.EntryActionVSCode
+	template.Spec.Capabilities.VSCode = true
+	template.Spec.Capabilities.OpenCode = true
+	template.Spec.ServicePorts = []devsandboxv1alpha1.ServicePort{{
+		Name: "code-server", Port: 13337, Protocol: corev1.ProtocolTCP,
+	}}
+	upstream, err := RenderUpstreamSandbox(sandbox, template, RenderOptions{
+		Now: now, OperatingMode: "Running", ShutdownTime: now.Add(time.Hour),
+		ServiceAccount: "sandbox", PVCName: "workspace", UpstreamName: "upstream",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	containers, _, _ := unstructured.NestedSlice(upstream.Object, "spec", "podTemplate", "spec", "containers")
+	workload := containers[0].(map[string]interface{})
+	assertVSCodeEnvironment(
+		t, workload["env"].([]interface{}),
+		"DEVSANDBOX_OPENCODE_RUNTIME_DIR", "/run/devsandbox-opencode",
+	)
+	assertVolumeMount(t, workload["volumeMounts"].([]interface{}), "opencode-runtime", "/run/devsandbox-opencode")
+	volumes, _, _ := unstructured.NestedSlice(upstream.Object, "spec", "podTemplate", "spec", "volumes")
+	assertMemoryVolume(t, volumes, "opencode-runtime", "256Mi")
+}
+
 func assertVSCodeEnvironment(t *testing.T, environment []interface{}, name, expected string) {
 	t.Helper()
 	for _, raw := range environment {
@@ -51,4 +78,18 @@ func assertVSCodeEnvironment(t *testing.T, environment []interface{}, name, expe
 		}
 	}
 	t.Fatalf("environment variable %s not rendered", name)
+}
+
+func assertVolumeMount(t *testing.T, mounts []interface{}, name, path string) {
+	t.Helper()
+	for _, raw := range mounts {
+		mount := raw.(map[string]interface{})
+		if mount["name"] == name {
+			if mount["mountPath"] != path {
+				t.Fatalf("%s mount path = %v, want %s", name, mount["mountPath"], path)
+			}
+			return
+		}
+	}
+	t.Fatalf("volume mount %s not found", name)
 }
