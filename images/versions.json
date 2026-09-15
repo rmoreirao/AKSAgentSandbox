@@ -1,12 +1,14 @@
 {
   "schemaVersion": 1,
-  "asOf": "2026-09-08",
+  "asOf": "2026-09-15",
   "templateVersion": "0.1.0",
   "templateVersions": {
     "standard": "0.1.0",
     "vscode": "0.1.0",
     "vscode-ai": "0.1.0",
-    "copilot": "0.1.1"
+    "copilot": "0.1.1",
+    "devsandbox-api": "0.1.1",
+    "devsandbox-operator": "0.1.1"
   },
   "baseImages": {
     "go": "docker.io/library/golang:1.27.0-bookworm@sha256:ded31c68586d2e49e760acc2e65a884b23d032e9bbbed0ae0c55abd3fcaf4452",
