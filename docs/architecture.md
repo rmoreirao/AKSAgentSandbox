@@ -98,6 +98,39 @@ Management components run in `devsandbox-system` on the system node pool.
 Sandbox resources run in `devsandbox-workloads` on nodes tainted and labelled
 for Kata VM isolation.
 
+## Why Kata VM isolation
+
+> [!IMPORTANT]
+> Kata and Ubuntu are not alternatives at the same layer. Ubuntu can be the
+> sandbox image or guest operating-system environment; Kata provides the
+> isolation boundary in which that environment runs.
+
+A conventional Kubernetes container on an Ubuntu or Azure Linux node shares
+the host kernel with every other container on that node. That is appropriate
+for trusted application services, but it is a weak boundary for a development
+platform that deliberately runs repository scripts, package installers,
+generated commands, and other potentially untrusted code.
+
+Kata runs each sandbox in a lightweight virtual machine with its own guest
+kernel while retaining the Kubernetes pod API and scheduling model. If code
+compromises the sandbox operating system, the additional VM boundary reduces
+the likelihood and blast radius of crossing into the AKS host or another
+developer's sandbox.
+
+| Standard container | Kata-isolated sandbox |
+| --- | --- |
+| Shares the node kernel | Uses a separate guest kernel |
+| Lower startup time and resource overhead | Stronger workload boundary with additional overhead |
+| Suited to trusted platform services | Suited to agent-driven and untrusted development workloads |
+| A container escape can expose the shared node | A sandbox compromise must also cross the VM boundary |
+
+The trade-off is additional startup latency, memory use, dedicated node-pool
+capacity, and operational complexity. A dedicated VM or node for every sandbox
+could provide a similar boundary, but at greater provisioning and management
+cost. Kata is used here because it combines VM-style isolation with the
+existing Kubernetes lifecycle. See [Workload isolation](security.md#workload-isolation)
+for the threat model and the controls Kata does not replace.
+
 ## Sandbox lifecycle
 
 The top-level `DevSandbox` custom resource is the lifecycle owner. Its

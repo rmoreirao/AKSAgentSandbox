@@ -86,11 +86,30 @@ platform session. It is not the production authentication design.
 
 ## Workload isolation
 
+> [!IMPORTANT]
+> DevSandbox executes code that the platform cannot assume is trustworthy.
+> Repository hooks and build scripts, dependencies, tests, generated agent
+> commands, and development tools all run inside the sandbox. Stronger-than-
+> container isolation is therefore a core security requirement, not only a
+> performance or packaging choice.
+
+Ordinary containers share the AKS node kernel. Non-root execution, seccomp,
+dropped capabilities, RBAC, and network policy reduce attack surface, but they
+do not remove that shared-kernel trust relationship. A successful kernel
+exploit or container escape could expose the node and other sandboxes scheduled
+on it.
+
 Sandbox pods are scheduled only to the tainted Kata user pool and request
-`kata-vm-isolation`. The pod and management workloads run as non-root, use the
-runtime-default seccomp profile, disallow privilege escalation, and drop Linux
-capabilities. Management containers also use read-only root filesystems where
-their runtime permits it.
+`kata-vm-isolation`. Kata places each sandbox in a lightweight VM with a
+separate guest kernel, adding a hardware-virtualized boundary between
+untrusted workload code, the AKS host, and neighboring sandboxes. An Ubuntu-
+based development environment can still run inside that boundary; changing the
+container base image to Ubuntu alone would not provide the same isolation.
+
+The pod and management workloads also run as non-root, use the runtime-default
+seccomp profile, disallow privilege escalation, and drop Linux capabilities.
+Management containers use read-only root filesystems where their runtime
+permits it. These controls remain necessary defense in depth even with Kata.
 
 The operator creates a dedicated PVC and service account for each sandbox.
 Workspace storage survives stop/resume, while `/run/devsandbox` is a
@@ -100,6 +119,18 @@ leases, upstream resources, and quota reservation.
 
 Templates pin the image digest captured by the `DevSandbox` resource. The
 operator rejects a template version or digest mismatch before provisioning.
+
+Kata does not make code inside a sandbox inherently trusted. It does not
+prevent that code from using credentials legitimately made available to the
+sandbox, accessing its workspace, or exfiltrating data through allowed egress.
+It also does not replace image security, patching, identity controls, network
+policy, credential minimization, monitoring, or hypervisor and host security.
+
+Running without Kata is reasonable only when workloads and users are trusted,
+the sandbox receives no valuable credentials, or an equivalent dedicated
+VM/node boundary exists. Using ordinary shared-kernel containers for this
+multi-user, agent-driven threat model would require an explicit acceptance of a
+materially larger cross-sandbox and node-compromise risk.
 
 ## Network and data protection
 
